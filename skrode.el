@@ -12,6 +12,10 @@
 ;; but they can be changed in the init file and the defconst skrode-directory
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; just making a note here that i want to start 'cleaning up' this code soon
+;; first: by making sure skrode-node-name variable does *not* contain brackets
+;; and writing a function to return the with-brackets variant when needed
+
 (defconst skrode-directory "~/skrode/" "where we keep the skrode files")
 (defconst skrode-extension ".skrd" "skrode nodes end with this extension")
 (defconst skrode-deleted-nodes-directory "~/skrode/deleted/"
