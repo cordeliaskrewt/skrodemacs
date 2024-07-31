@@ -59,6 +59,26 @@
        (define-key skrode-button-map [M-drag-mouse-1] 'ignore)
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
+;; next feature that i need to add
+;; function skrf-link-positions-in-buffer
+;; takes a buffer containing a skrode file
+;; returns list of start & end pairs of markers into buffer
+;; each pair describing a link...
+;; also function skrf-links-in-buffer
+;; returns a list of link-text values
+;; rename-this-node-throughout-skrode wants skrf-links-in-buffer
+;; break-skrode-link wants skrf-link-positions-in-buffer
+;; skrode-ify-buffer currently wants to call both
+;; although the two calls will be split out into two separate functions later.
+
+;; FIRST: write and test skrf-link-positions-in-buffer, & document
+;; SECOND: write and test srkf-links-in-buffer, & document
+;; THIRD: rewrite rename-this-node-throughout-skrode to use skrf-links-in-buffer, & test, & document
+;; FOURTH: rewrite break-skrode-link to use skrf-link-positions-in-buffer, & test, & document
+;; (possibly switch the orders of THIRD and FOURTH, and of FIFTH and SIXTH)
+;; FIFTH: rewrite skrode-ify-buffer to use skrf-links-in-buffer, & test & document
+;; SIXTH: rewrite skrode-ify-buffer to use skrf-link-positions-in-buffer, & test & document
+
 ;; creating a function to shadow forward-button
 ;; so display-message (default t) will not show help-echo in minibuffer
 (defun skrf-forward-button () (interactive)
