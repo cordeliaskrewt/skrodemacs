@@ -47,7 +47,7 @@
 
 ;; returns a list of windows which are the most eligible
 ;; for splitting horizontally to create a new window
-(defun autowin-which-horizion ()
+(defun autowin-which-horizon ()
   ;; autowin-x-overlaps sorted max overlap to min
   (let ((autowin-x-overlaps-orted
 	 (sort (autowin-x-overlaps (autowin-tallest-windows))
