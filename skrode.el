@@ -369,7 +369,7 @@ full absolute file path"
 		       '(read-only t rear-nonsticky t))
   ;; reset variables back to their default state
   (setq inhibit-modification-hooks nil)
-  (setq inhbit-read-only nil))
+  (setq inhibit-read-only nil))
 
 (defun make-skrode-title (start-pos end-pos)
   "sets skrode-node-name variable, and properties of displayed node title.
