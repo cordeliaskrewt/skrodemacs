@@ -15,14 +15,14 @@
 
 (defconst skrode-directory "~/skrode/" "where we keep the skrode files")
 (defconst skrode-extension ".skrd" "skrode nodes end with this extension")
-(defconst skrode-deleted-nodes-directory "~/skrode/deleted/"
-  "where e.g. orphan nodes go")
 (defconst skrode-header-divider "\n------------------\n\n"
   "a skrode node consists of a title, this divider, and a body")
 (defconst skrode-left-delimiter "[[")
 (defconst skrode-right-delimiter "]]")
 (defconst skrode-left-delimiter-broken "[-[")
 (defconst skrode-right-delimiter-broken "]-]")
+(defconst skrode-orphans-node "skrode orphans"
+  "a node to collect links to nodes with no remaining non-broken links")
 
 
 ;; the mode's keymap must have this name
@@ -59,26 +59,6 @@
        (define-key skrode-button-map [M-drag-mouse-1] 'ignore)
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
-;; next feature that i need to add
-;; function skrf-link-positions-in-buffer
-;; takes a buffer containing a skrode file
-;; returns list of start & end pairs of markers into buffer
-;; each pair describing a link...
-;; also function skrf-links-in-buffer
-;; returns a list of link-text values
-;; rename-this-node-throughout-skrode wants skrf-links-in-buffer
-;; break-skrode-link wants skrf-link-positions-in-buffer
-;; skrode-ify-buffer currently wants to call both
-;; although the two calls will be split out into two separate functions later.
-
-;; FIRST: write and test skrf-link-positions-in-buffer, & document
-;; SECOND: write and test srkf-links-in-buffer, & document
-;; THIRD: rewrite rename-this-node-throughout-skrode to use skrf-links-in-buffer, & test, & document
-;; FOURTH: rewrite break-skrode-link to use skrf-link-positions-in-buffer, & test, & document
-;; (possibly switch the orders of THIRD and FOURTH, and of FIFTH and SIXTH)
-;; FIFTH: rewrite skrode-ify-buffer to use skrf-links-in-buffer, & test & document
-;; SIXTH: rewrite skrode-ify-buffer to use skrf-link-positions-in-buffer, & test & document
-
 ;; creating a function to shadow forward-button
 ;; so display-message (default t) will not show help-echo in minibuffer
 (defun skrf-forward-button () (interactive)
@@ -95,6 +75,54 @@
 (defun skrf-link-to-text (skrv-link)
   (substring skrv-link (length skrode-left-delimiter)
 	     (- (length skrode-right-delimiter))))
+
+;; returns list of positions of links from point in buffer to end
+;; (end of accessible portion of buffer if relevant)
+;; as (car.cdr) pairs of markers denoting (start.end) of links
+(defun skrf-link-positions-in-buffer (skrv-buf)
+  (let ((link-positions nil))
+    ;; \\ in string becomes \ in the regular expression
+    ;; \\ is needed to escape the literal [ characters for skrode-left-delimiter
+    ;; [[:ascii:][:nonascii:]] makes the regexp match any character, including newlines
+    ;; *? makes the regexp match any number of above characters, including none
+    ;; (all the above needs to be double-checked with the manual to make sure)
+    (while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
+      ;; save positions in match data as markers so that
+      ;; they will continue to identify links after buffer is edited
+      (push (cons (copy-marker (match-beginning 0))
+		  (copy-marker (match-end 0)))
+	    link-positions))
+    link-positions))
+
+;; returns list of link names from point in buffer to end
+;; (end of accessible portion of buffer if relevant)
+;; calls skrf-link-positions-in-buffer
+;; because getting the positions from the links would be *far* more difficult
+;; and there's no reason to code the same work more than once
+(defun skrf-links-in-buffer (skrv-buf)
+  (let ((link-positions (skrf-link-positions-in-buffer skrv-buf))
+	(link-names nil))
+    (dolist (position-pair link-positions)
+      (push
+       ;; link *positions* correctly contain the delimiters as well as the link text
+       ;; the list of link names shouldn't
+       (skrf-link-to-text
+	(buffer-substring-no-properties (car position-pair) (cdr position-pair)))
+       link-names))
+    link-names))
+
+;; returns the node name of the current skrode buffer
+;; useful mostly if the buffer's a temp buffer
+;; but also actually i can use this function all the time
+;; rather than having a skrode-node-name variable to maintain?
+(defun skrf-node-name ()
+  (save-mark-and-excursion
+    (goto-char (point-min))
+    (search-forward skrode-header-divider nil t)
+    (skrf-link-to-text
+     (buffer-substring-no-properties
+      (point-min)
+      (- (point) (length skrode-header-divider))))))
 
 ;; wraparound function to call skrf-open-node-in-new-window
 ;; using mouse position to find link
@@ -253,34 +281,32 @@ full absolute file path"
   "change link to current node in all the nodes it's linked to"
   (let ((skrv-old-name (skrf-text-to-link old-node-name))
 	(skrv-new-name (skrf-text-to-link new-title)))
-    ;; first find each link to change
-    (save-excursion
+    (save-mark-and-excursion
       (goto-char (point-min))
       (search-forward skrode-header-divider)
-      (while (search-forward "[[" nil t)
-	(let* ((other-node-name
-		(buffer-substring (point) (- (search-forward "]]" nil t) 2)))
-	       (other-node (skrode-filename other-node-name)))
-	  (let ((linked-to-buffer (get-file-buffer other-node)))
+      ;; first find each link to change
+      (let ((skrv-links-in-node-being-renamed (skrf-links-in-buffer (current-buffer))))
+	(dolist (node-with-backlink-to-change skrv-links-in-node-being-renamed)
+	  (let ((linked-to-buffer (get-file-buffer (skrode-filename node-with-backlink-to-change))))
 	    ;; if link is open in a buffer, change the other node there
 	    (if linked-to-buffer
 		(with-current-buffer linked-to-buffer
 		  ;; so that search-and-replace
 		  ;; does not trigger link breaking etc.
 		  (setq inhibit-modification-hooks t)
-		  (save-excursion
+		  (save-mark-and-excursion
 		    (goto-char (point-min))
 		    (while (search-forward skrv-old-name nil t)
-		  		      (replace-match skrv-new-name t t)))
+		      (replace-match skrv-new-name t t)))
 		  (skrode-ify-buffer)
 		  (setq inhibit-modification-hooks nil))
 	      ;; otherwise, change link straight in the file
 	      (progn
-		(make-skrode-file other-node-name)
-		(with-temp-file other-node (insert-file-contents other-node)
-				(while (search-forward skrv-old-name nil t)
-				  (replace-match skrv-new-name t t)
-				  ))))))))))
+		(make-skrode-file node-with-backlink-to-change)
+		(with-temp-file (skrode-filename node-with-backlink-to-change)
+		  (insert-file-contents (skrode-filename node-with-backlink-to-change))
+		  (while (search-forward skrv-old-name nil t)
+		    (replace-match skrv-new-name t t)))))))))))
 
 (defun rename-this-skrode-node (new-title)
   "makes all the changes necessary to rename a skrode node"
@@ -369,27 +395,15 @@ full absolute file path"
     ;; otherwise use end of insertion/deletion
     end-from-hook))
 
-(defun is-skrode-node-orphan ()
-  "looks at current buffer to see if node's an orphan and should be deleted"
-  ;; i'm either in a save-excursion already or in a temp buffer
-  (goto-char (point-min))
-  ;; backslash needs to be escaped so it appears literally in regexp
-  ;; . matches every character except newline
-  ;;to match every character, need this workaround
-  (when (looking-at (concat "\\[\\[[[:ascii:][:nonascii:]]*?]]"
-			    skrode-header-divider))
-    ;; if there's nothing abnormal about the header, move past it & keep looking
-    (goto-char (match-end 0))
-    ;; \s is space. \r is carriage return.
-    ;; regexp's built-in whitespace class [:space:] didn't seem to work.
-    (while (looking-at "[\s\n\t\r]*?\\[-\\[[[:ascii:][:nonascii:]]*?]-]")
-      (goto-char (match-end 0)))
-    ;; while loop ends at end of buffer, or when text after point
-    ;; is anything other than broken link optionally preceded by whitespace
-    (skip-chars-forward "\s\n\t\r")
-    ;; if there's nothing besides whitespace left in the buffer
-    ;; *then* node's an orphan
-    (if (equal (point) (point-max)) t)))
+;; returns t if current node has no non-broken skrode links, nil otherwise
+(defun skrf-node-orphan-p ()
+  ;; advance past header
+  (save-mark-and-excursion
+    (goto-char (point-min))
+    (search-forward skrode-header-divider)
+    ;; using skrf-link-positions-in-buffer rather than skrf-link-in-buffer
+    ;; because skrf-links-in-buffer calls skrf-link-positions-in-buffer
+    (not (skrf-link-positions-in-buffer (current-buffer)))))
 
 (defun dealing-with-broken-skrode-link-target (this-node-name)
   "replace links to ~this~ node with broken links, and
@@ -399,45 +413,32 @@ say if node should be deleted"
     ;; replace-match uses the last match found, in this case by search-forward
     ;; fresh new string has no button properties
     (replace-match (concat "[-[" this-node-name "]-]") nil t))
-  (if (is-skrode-node-orphan)
-      (progn
-	;; write-region avoids calling any save-buffer hooks
-	(write-region nil nil
-		      (concat skrode-deleted-nodes-directory
-			      (substring link-target (length skrode-directory)
-					 nil)))
-	t) ;; returns t if target needs to be deleted, and nil otherwise
-    nil))
+  (when (skrf-node-orphan-p)
+    (goto-char (point-max))
+    (insert (concat " " (skrf-text-to-link skrode-orphans-node)))
+    ;; so the auto-backlink to skrode-orphans-node will be created
+    ;; call with the optional in-temp-buffer param
+    ;; so properties are not created - only backlinks & the nodes containing them
+    ;; when necessary
+    (skrode-ify-buffer t)))
 
-(defun break-other-side-of-skrode-link (link-target linked-node-name)
+(defun break-other-side-of-skrode-link (link-target)
   "when a link is being broken, go to linked node and
  break link(s) back to this node"
   (let ((target-node-buffer (get-file-buffer link-target))
-	(target-is-orphan nil)
-	(this-node-name skrode-node-name))
+	(this-node-name (skrf-node-name)))
     ;; if linked node is being visited by a buffer, break link in buffer
     (if target-node-buffer
-	(progn
-	  (with-current-buffer target-node-buffer
-	    (save-excursion
-	      (goto-char (point-min))
-	      ;; this line does most of the work - whether with buffer or file
-	      (setq target-is-orphan
-		    (dealing-with-broken-skrode-link-target this-node-name))
-	      ;; so killing buffer doesn't ask user for permission
-	      (if target-is-orphan (set-buffer-modified-p nil))))
-	  ;; wait for buffer to no longer be current before we kill it
-	  (if target-is-orphan
-	      (kill-buffer target-node-buffer)))
+	(with-current-buffer target-node-buffer
+	  (save-mark-and-excursion
+	    (goto-char (point-min))
+	    (dealing-with-broken-skrode-link-target this-node-name)))
       ;; if linked node is not being visited, break link directly in file
-      (progn
-	(make-skrode-file linked-node-name)
-	;; to avoid errors if it doesn't exist
-	(with-temp-file
-	    link-target (insert-file-contents link-target)
-	    (setq target-is-orphan
-		  (dealing-with-broken-skrode-link-target this-node-name)))))
-    (if target-is-orphan (delete-file link-target))))
+      ;; to avoid errors if it doesn't exist
+      (if (file-exists-p link-target)
+	  (with-temp-file
+	      link-target (insert-file-contents link-target)
+	    (dealing-with-broken-skrode-link-target this-node-name))))))
 
 (defun break-individual-skrode-link
     (start end start-modification-region end-modification-region)
@@ -445,25 +446,27 @@ say if node should be deleted"
   ;; gotta set this so remove doesn't call break-skrode-link
   (setq inhibit-modification-hooks t)
   (let ((link-target (get-text-property start 'link-target))
-	(linked-node-name (buffer-substring-no-properties (+ start 2)
-							  (- end 2))))
+	(linked-node-name (get-text-property start 'link-text)))
     ;; remove all the text properties associated with a skrode link
     (remove-list-of-text-properties
      start end
      '(insert-behind-hooks insert-in-front-hooks modification-hooks
-			   action link-target skrode-link category button))
+			   button category skrode-link link-text link-target
+			   keymap action help-echo))
     ;; so search doesn't move point
-    (save-excursion
-	(goto-char (point-min))
+    (save-mark-and-excursion
+      (goto-char (point-min))
 	;; iff this is the only link to target, break other side of link
 	(if (not (or (search-forward (concat "[[" linked-node-name "]]")
 				     start-modification-region t)
 		     (progn (goto-char end-modification-region)
 			    (search-forward (concat "[[" linked-node-name "]]")
 					    nil t))))
-	    (break-other-side-of-skrode-link link-target linked-node-name))))
+	    (break-other-side-of-skrode-link link-target))))
   (setq inhibit-modification-hooks nil))
 
+;; called when user modifies a skrode link, breaking it
+;; start and end define the part of the buffer that was modified
 (defun break-skrode-link (start end)
   "turn edited links into plain text. and break other ~ends~ of these links,
 in other nodes."
@@ -477,19 +480,16 @@ in other nodes."
 				    (button-start (- start 1)) (button-end end))
   ;; if not, find  the part of the buffer i want to break links in
   (let ((start-stretch (find-start-of-broken-skrode-link-s start end))
-	(end-stretch (find-end-of-broken-skrode-link-s start end))
-	(links-affected nil))
+	(end-stretch (find-end-of-broken-skrode-link-s start end)))
     ;; and go through affected stretch of buffer looking for links to break
-      (save-excursion
+      (save-mark-and-excursion
 	(goto-char start-stretch)
 	(narrow-to-region start-stretch end-stretch)
-	(while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
-	  (push (cons (match-beginning 0) (match-end 0)) links-affected))
-	(widen)
-	(while links-affected
-	  (let ((individual-link (pop links-affected)))
-	    (break-individual-skrode-link (car individual-link)
-					  (cdr individual-link)
+	(let ((positions-of-links-affected (skrf-link-positions-in-buffer (current-buffer))))
+	  (widen)
+	  (dolist (positions-of-individual-link positions-of-links-affected)
+	    (break-individual-skrode-link (car positions-of-individual-link)
+					  (cdr positions-of-individual-link)
 					  start-stretch end-stretch)))))))
 
 (defun make-skrode-link-break-on-edit-attempt (start end)
@@ -560,20 +560,37 @@ no other contents."
   "turns this string into [-[that string]-]"
   (concat skrode-left-delimiter-broken skrv-link-text skrode-right-delimiter-broken))
 
+;; if current buffer contains a link to the skrode orphans node
+;; break both that link
+;; and any link in the skrode orphans node back to the current node
+(defun skrf-unorphan-node ()
+  (let ((orphan-p nil))
+    (while (search-forward (skrf-text-to-link skrode-orphans-node) nil t)
+      (setq inhibit-modification-hooks t)
+      (replace-match (skrf-text-to-broken-link skrode-orphans-node))
+      (setq inhibit-modification-hooks nil)
+      (setq orphan-p t))
+    (if orphan-p
+      (break-other-side-of-skrode-link (skrode-filename skrode-orphans-node)))))
+
 (defun put-skrode-backlink-in-distant-node (this-node-name)
   "a helper function for make-skrode-backlink, to be called
 whether node's ~open~ or not"
   ;; called from context where distant node is already current buffer
+  ;; also, point is at the start of the node
   (let ((found-broken-link-s nil))
     ;; if there are broken links to this node, then un-break them
     (while (search-forward (skrf-text-to-broken-link this-node-name) nil t)
       (replace-match (skrf-text-to-link this-node-name))
       (setq found-broken-link-s t))
+    ;; point moves forward iff at least one match is found
     ;; otherwise, if there are no working links either, add one at the end
     (if (not found-broken-link-s)
+	;; again, point moves forward iff a match is found
 	(when (not (search-forward (skrf-text-to-link this-node-name) nil t))
 	  (goto-char (point-max))
-	  (insert (concat " " (skrf-text-to-link this-node-name)))))))
+	  (insert (concat " " (skrf-text-to-link this-node-name))))))
+  (skrf-unorphan-node))
 
 (defun make-skrode-backlink (linked-node-filename this-node-name)
   "create link back to ~this~ node in ~linked-to~ node,
@@ -584,7 +601,7 @@ if one does not exist already"
 	;; if the node is being visited in a buffer
 	;;search & add link to buffer
 	(with-current-buffer linked-to-buffer
-	    (save-excursion
+	    (save-mark-and-excursion
 	      (goto-char (point-min))
 	      (put-skrode-backlink-in-distant-node this-node-name)
 	      (skrode-ify-buffer))) ;; so link is clickable immediately
@@ -599,7 +616,7 @@ if one does not exist already"
       ;; don't rely on making it a hook, bc hooks can run in any order
       (button-mode))
   (with-silent-modifications ;; bc we're only changing properties, not text
-    (save-excursion
+    (save-mark-and-excursion
       (goto-char (point-min))
 
       ;; shouldn't have to re-make name every time we re-skrode-ify, but..
