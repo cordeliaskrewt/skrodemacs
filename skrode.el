@@ -247,7 +247,7 @@ or a collection if one exists."
 	    (write-region skrv-new-node-contents nil
 			  skrv-new-node-filename t)
 	    ;; at end of new node, add link back to the current buffer
-	    (write-region (concat "\n\n" (skrf-text-to-link skrode-node-name)) nil
+	    (write-region (concat "\n\n" (skrf-text-to-link (skrf-node-name))) nil
 			  skrv-new-node-filename t)
 	    ;; remove selected text from the current (source) node
 	    (textcollect-delete-collection)
