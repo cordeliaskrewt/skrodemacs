@@ -351,8 +351,9 @@ full absolute file path"
 (defun get-new-skrode-node-name (&optional beg end)
   "ask user for new node name, and rename node if given acceptable answer"
   (interactive)
-  (let ((new-title (read-string "node name: " skrode-node-name)))
-    (if (or (string= new-title "") (string= new-title skrode-node-name))
+  (let* ((current-node-name (skrf-node-name))
+	 (new-title (read-string "node name: " current-node-name)))
+    (if (or (string= new-title "") (string= new-title current-node-name))
 	(message "rename attempt cancelled")
       (if (file-exists-p (skrode-filename new-title))
 	  (message (concat "node with title " new-title " already exists."))
