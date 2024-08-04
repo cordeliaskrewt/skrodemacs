@@ -124,6 +124,17 @@
       (point-min)
       (- (point) (length skrode-header-divider))))))
 
+(defun skrf-new-window ()
+  ;; if autowin mode is enabled, return new window from autowin-new
+  (if (boundp 'autowin-mode) (autowin-new)
+    ;; if autowin mode is not enabled
+    ;; split current window in half to create and return a new window
+    ;; if window is taller than wide, return bottom half of current window
+    (if (> (window-total-height) (window-total-width))
+	(split-window)
+      ;; if window is wider than tall, return right half of current window
+      (split-window nil nil t))))
+
 ;; wraparound function to call skrf-open-node-in-new-window
 ;; using mouse position to find link
 (defun skrf-open-node-in-new-window-from-click ()
@@ -145,7 +156,7 @@
 (defun skrf-open-node-in-new-window (skrv-filename)
   (let ((skrv-buf (current-buffer)))
     ;;    (set-window-buffer (split-window) (find-file skrv-filename))
-    (set-window-buffer (autowin-new) (find-file skrv-filename))
+    (set-window-buffer (skrf-new-window) (find-file skrv-filename))
   ;; find-file opens target in both current window & split window
   ;; so skrv-buf sets current window back to the state it was in
     (switch-to-buffer skrv-buf)))
@@ -514,7 +525,7 @@ and its reciprocal other end"
 	;; if you can't kill it eg because the user says no
 	;; then move it into a new window instead
 	(if (not (kill-buffer skrv-old-buf))
-	    (set-window-buffer (split-window) skrv-old-buf)))))
+	    (set-window-buffer (skrf-new-window) skrv-old-buf)))))
 
 (defun skrf-preview-node (skrv-win skrv-buf skrv-pos)
   ;; first get the 'link-target property of skrv-buf at skrv-pos
