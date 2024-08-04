@@ -321,29 +321,33 @@ full absolute file path"
 
 (defun rename-this-skrode-node (new-title)
   "makes all the changes necessary to rename a skrode node"
-  ;; rewriting the title lines and giving them the necessary properties
-  ;; to make sure search-forward starts from the right place
-  (goto-char (point-min))
-  (setq inhibit-modification-hooks t) ;; so we don't trigger rename dialog
-  (delete-region (point-min)
-		 (- (search-forward skrode-header-divider nil t) 21))
-  (setq inhibit-read-only t)
-  (goto-char (point-min))
-  (insert (skrf-text-to-link new-title))
-  ;; setting these variables back to their default state
-  (setq inhibit-modification-hooks nil)
-  (setq inhibit-read-only nil)
-  (make-skrode-title-trigger-rename-dialog (point-min) (point))
-  ;; rename the file... and the buffer, so that it's visiting the new file
-  (rename-file buffer-file-name (skrode-filename new-title))
-  ;; WARNING, set-visited-file-name appears to clobber buffer-local variables
-  (set-visited-file-name (skrode-filename new-title) nil t)
-  (if (file-exists-p (skrode-filename skrode-node-name))
-      (delete-file (skrode-filename skrode-node-name)))
-  ;; change the link in all the other nodes this node is linked to
-  (rename-this-node-throughout-skrode skrode-node-name new-title)
-  ;; and finally reset the internal name variable
-  (setq skrode-node-name new-title))
+  ;; save the old node name for later in the function before it is overwritten
+  (let ((old-node-name (skrf-node-name)))
+    ;; rewriting the title lines and giving them the necessary properties
+    ;; to make sure search-forward starts from the right place
+    (goto-char (point-min))
+    (setq inhibit-modification-hooks t) ;; so we don't trigger rename dialog
+    (delete-region (point-min)
+		   (- (search-forward skrode-header-divider nil t) 21))
+    (setq inhibit-read-only t)
+    (goto-char (point-min))
+    (insert (skrf-text-to-link new-title))
+    ;; setting these variables back to their default state
+    (setq inhibit-modification-hooks nil)
+    (setq inhibit-read-only nil)
+    (make-skrode-title-trigger-rename-dialog (point-min) (point))
+    ;; rename the file... and the buffer, so that it's visiting the new file
+    (rename-file buffer-file-name (skrode-filename new-title))
+    ;; WARNING, set-visited-file-name appears to clobber buffer-local variables
+    (set-visited-file-name (skrode-filename new-title) nil t)
+    ;; avoid crashing program if skrf-node-name somehow failed to return a value
+    (when old-node-name
+      (if (file-exists-p (skrode-filename old-node-name))
+	  (delete-file (skrode-filename old-node-name)))
+      ;; change the link in all the other nodes this node is linked to
+      (rename-this-node-throughout-skrode old-node-name new-title))
+    ;; and finally reset the internal name variable
+    (setq skrode-node-name new-title)))
 
 ;; parameters begin and end are not used, but when function is invoked as an action from a button
 ;; they are sent automatically.  interactive invocation of the function (via key sequence) does not
