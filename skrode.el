@@ -116,13 +116,15 @@
 ;; but also actually i can use this function all the time
 ;; rather than having a skrode-node-name variable to maintain?
 (defun skrf-node-name ()
+  (let ((node-name
   (save-mark-and-excursion
     (goto-char (point-min))
     (search-forward skrode-header-divider nil t)
     (skrf-link-to-text
      (buffer-substring-no-properties
       (point-min)
-      (- (point) (length skrode-header-divider))))))
+      (- (point) (length skrode-header-divider)))))))
+    (if node-name node-name "")))
 
 (defun skrf-new-window ()
   ;; if autowin mode is enabled, return new window from autowin-new
@@ -174,7 +176,6 @@ from the skrode."
 	     (skrv-link-end (button-end skrv-pt))
 	     (skrv-target-node-name (get-text-property skrv-pt 'link-text))
 	     ;; saving the buffer-local variable to use in with-temp-buffer
-	     (skrv-current-node-name skrode-node-name)
 	     (skrv-string-to-insert ""))
 	;; remove link and replace it in situ with broken link
 	(delete-region skrv-link-start skrv-link-end)
@@ -184,8 +185,7 @@ from the skrode."
 	(with-temp-buffer
 	  (insert-file-contents (skrode-filename skrv-target-node-name))
 	  ;; change backlinks to node-to-be-dumped to point to current buffer
-	  (rename-this-node-throughout-skrode
-	   skrv-target-node-name skrv-current-node-name)
+	  (rename-this-node-throughout-skrode skrv-target-node-name (skrf-node-name))
 	  ;; get body of node to be dumped as string
 	  (goto-char (point-min))
 	  (search-forward skrode-header-divider)
@@ -340,14 +340,12 @@ full absolute file path"
     (rename-file buffer-file-name (skrode-filename new-title))
     ;; WARNING, set-visited-file-name appears to clobber buffer-local variables
     (set-visited-file-name (skrode-filename new-title) nil t)
-    ;; avoid crashing program if skrf-node-name somehow failed to return a value
-    (when old-node-name
-      (if (file-exists-p (skrode-filename old-node-name))
-	  (delete-file (skrode-filename old-node-name)))
-      ;; change the link in all the other nodes this node is linked to
-      (rename-this-node-throughout-skrode old-node-name new-title))
+    (if (file-exists-p (skrode-filename old-node-name))
+	(delete-file (skrode-filename old-node-name)))
+    ;; change the link in all the other nodes this node is linked to
+    (rename-this-node-throughout-skrode old-node-name new-title))
     ;; and finally reset the internal name variable
-    (setq skrode-node-name new-title)))
+    (setq skrode-node-name new-title))
 
 ;; parameters begin and end are not used, but when function is invoked as an action from a button
 ;; they are sent automatically.  interactive invocation of the function (via key sequence) does not
