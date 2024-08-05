@@ -86,13 +86,16 @@
     ;; [[:ascii:][:nonascii:]] makes the regexp match any character, including newlines
     ;; *? makes the regexp match any number of above characters, including none
     ;; (all the above needs to be double-checked with the manual to make sure)
-    (while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
-      ;; save positions in match data as markers so that
-      ;; they will continue to identify links after buffer is edited
-      (push (cons (copy-marker (match-beginning 0))
-		  (copy-marker (match-end 0)))
-	    link-positions))
-    link-positions))
+    (save-mark-and-excursion
+      (goto-char (point-min))
+      (search-forward skrode-header-divider nil t)
+      (while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
+	;; save positions in match data as markers so that
+	;; they will continue to identify links after buffer is edited
+	(push (cons (copy-marker (match-beginning 0))
+		    (copy-marker (match-end 0)))
+	      link-positions))
+      link-positions)))
 
 ;; returns list of link names from point in buffer to end
 ;; (end of accessible portion of buffer if relevant)
@@ -636,21 +639,23 @@ if one does not exist already"
 	(put-skrode-backlink-in-distant-node this-node-name)))))
 
 (defun skrf-format-title ()
+  (message "in skrf-format-title")
   "checks that displayed title matches filename,
 and sets properties of displayed node title"
-    (save-mark-and-excursion
+  (save-mark-and-excursion
+    (with-silent-modifications
       (goto-char (point-min))
       (search-forward skrode-header-divider)
       (check-skrode-title)
       (make-skrode-title-trigger-rename-dialog 
-       (point-min) (- (point) (length skrode-header-divider)))))
+       (point-min) (- (point) (length skrode-header-divider))))))
 
 ;; for all links in the current buffer
 ;; that don't already have the skrode-link property
 (defun skrf-give-links-properties ()
   ;; because we're only changing properties, not text
   (with-silent-modifications
-    (dolist (link-start-and-end (skrf-link-positions-in-buffer))
+    (dolist (link-start-and-end (skrf-link-positions-in-buffer (current-buffer)))
       (if (text-property-not-all (car link-start-and-end) (cdr link-start-and-end)
 				 'skrode-link t)
 	  (make-skrode-link (car link-start-and-end) (cdr link-start-and-end))))))
@@ -659,7 +664,7 @@ and sets properties of displayed node title"
 (defun skrf-give-links-backlinks ()
   ;; because we're only changing properties, not text
   (with-silent-modifications
-    (dolist (link-name (skrf-links-in-buffer))
+    (dolist (link-name (skrf-links-in-buffer (current-buffer)))
       (make-skrode-file link-name)
       (make-skrode-backlink (skrode-filename link-name)))))
 
