@@ -73,8 +73,10 @@
   (concat skrode-left-delimiter skrv-node-name skrode-right-delimiter))
 
 (defun skrf-link-to-text (skrv-link)
+  (if (>= (length skrf-link) (+ (length skrode-left-delimiter)
+				(length skrode-right-delimiter)))
   (substring skrv-link (length skrode-left-delimiter)
-	     (- (length skrode-right-delimiter))))
+	     (- (length skrode-right-delimiter)))))
 
 ;; returns list of positions of links from point in buffer to end
 ;; (end of accessible portion of buffer if relevant)
