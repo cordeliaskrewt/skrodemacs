@@ -231,6 +231,7 @@ link the cursor is on, if any.  creates and removes backlinks as needed."
 		  (with-current-buffer skrv-target-buf
 		    (goto-char (point-max))
 		    (insert skrv-throw-string)
+		    (skrf-give-links-properties)
 		    (skrf-give-links-backlinks))
 		(with-temp-buffer
 		  (write-region skrv-throw-string nil skrv-target-filename t)
@@ -647,6 +648,7 @@ and sets properties of displayed node title"
 ;; for all links in the current buffer
 ;; that don't already have the skrode-link property
 (defun skrf-give-links-properties ()
+  ;; because we're only changing properties, not text
   (with-silent-modifications
     (dolist (link-start-and-end (skrf-link-positions-in-buffer))
       (if (text-property-not-all (car link-start-and-end) (cdr link-start-and-end)
@@ -655,30 +657,27 @@ and sets properties of displayed node title"
 
 ;; for all links in the current buffer
 (defun skrf-give-links-backlinks ()
+  ;; because we're only changing properties, not text
   (with-silent-modifications
     (dolist (link-name (skrf-links-in-buffer))
       (make-skrode-file link-name)
       (make-skrode-backlink (skrode-filename link-name)))))
 
-;; in skrode mode, call this function whenever node is opened or saved
-(defun skrode-ify-buffer (&optional in-temp-buffer)
-  (if (not in-temp-buffer)
-      ;; don't rely on making it a hook, bc hooks can run in any order
-      (button-mode))
-  (with-silent-modifications ;; bc we're only changing properties, not text
-    (if (not in-temp-buffer)
-	(skrf-format-title)))
-  ;; add link properties to any link that doesn't already have them
-  ;; and backlinks
-  (if (not in-temp-buffer) (skrf-give-links-properties))
-  (skrf-give-links-backlinks))
+(defun skrf-open-node ()
+  (button-mode) ;; manual call because hooks can run in any order
+  (skrf-format-title)
+  (skrf-eval-links))
 
+(defun skrf-eval-links ()
+  ;; add link properties to any link that doesn't already have them
+  (skrf-give-links-properties)
+  ;; add a backlink to any link that doesn't have one
+  (skrf-give-links-backlinks))
 
 (define-derived-mode skrode-mode text-mode "Skrode"
   "a programmable personal knowledge base system" :interactive nil
-;;  (wc-mode t) - commented out since wc-mode doesn't work currently
-  (add-hook 'skrode-mode-hook 'skrode-ify-buffer 0 t) ;; hooks are buffer-local
-  (add-hook 'before-save-hook 'skrode-ify-buffer 0 t)
+  (add-hook 'skrode-mode-hook 'skrf-open-node 0 t) ;; hooks are buffer-local
+  (add-hook 'before-save-hook 'skrf-eval-links 0 t)
   )
 
 (provide 'skrode)
