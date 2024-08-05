@@ -201,6 +201,21 @@ from the skrode."
 	    (restore-buffer-modified-p nil)
 	    (kill-buffer)))))))
 
+(defun skrf-cellect-string ()
+  (if (boundp 'textcollect-mode)
+      (textcollect-get-string)
+    ;; otherwise it's just selection as string
+    ;; and empty string if no selection
+    (if use-region-p
+	(buffer-substring (region-beginning) (region-end))
+      "")))
+
+(defun skrf-delete-cellection ()
+  (if (boundp 'textcollect-mode)
+      (textcollect-delete-collection)
+    (if (use-region-p)
+	(delete-region (region-beginning) (region-end)))))
+
 (defun skrf-throw-into-node (skrv-pt)
   "writes selected region from current buffer into the node pointed to by the
 link the cursor is on, if any.  creates and removes backlinks as needed."
@@ -208,7 +223,7 @@ link the cursor is on, if any.  creates and removes backlinks as needed."
   ;; check if point is on a link
   (let ((skrv-target-filename (get-text-property skrv-pt 'link-target)))
     (if skrv-target-filename
-	(let ((skrv-throw-string (textcollect-get-string)))
+	(let ((skrv-throw-string (skrf-cellect-string)))
 	  (if skrv-throw-string
 	    (let ((skrv-target-buf (get-file-buffer skrv-target-filename)))
 	      (if skrv-target-buf
@@ -220,7 +235,7 @@ link the cursor is on, if any.  creates and removes backlinks as needed."
 		  (write-region skrv-throw-string nil skrv-target-filename t)
 		  (insert-file-contents skrv-target-filename)
 		  (skrode-ify-buffer t)))
-	      (textcollect-delete-collection)))))))
+	      (skrf-delete-cellection)))))))
 
 (defun skrf-create-node-from-selection (skrv-new-node-name)
   "Creates a new node from a text selection in an existing skrode node.
@@ -232,7 +247,7 @@ or a collection if one exists."
    "senter new node's name (empty string to cancel node creation) "
    skrode-mode)
   ;; if no region is selected, exit function with an error message
-  (let ((skrv-new-node-contents (textcollect-get-string)))
+  (let ((skrv-new-node-contents (skrf-cellect-string)))
     (if (not skrv-new-node-contents)
 	(message "cannot make node from selection when there is no selection")
   ;; first set up the variables with which to make the new node
@@ -250,7 +265,7 @@ or a collection if one exists."
 	    (write-region (concat "\n\n" (skrf-text-to-link (skrf-node-name))) nil
 			  skrv-new-node-filename t)
 	    ;; remove selected text from the current (source) node
-	    (textcollect-delete-collection)
+	    (skrf-delete-cellection)
 	    ;; and put a link to the new node in its place
 	    (insert (skrf-text-to-link skrv-new-node-name))
 	    ;; re-skrode-ify the current buffer so that any links
