@@ -192,7 +192,8 @@ from the skrode."
 	  (setq skrv-string-to-insert (buffer-substring (point) (point-max))))
 	;; insert body of node-to-be-dumped into current node at point
 	(insert skrv-string-to-insert)
-	(skrode-ify-buffer)
+	(skrf-give-links-properties)
+	(srkf-give-links-backlinks)
 	;; finally, delete the dumped node's file
 	(delete-file skrv-target-filename)
 	;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
@@ -230,11 +231,11 @@ link the cursor is on, if any.  creates and removes backlinks as needed."
 		  (with-current-buffer skrv-target-buf
 		    (goto-char (point-max))
 		    (insert skrv-throw-string)
-		    (skrode-ify-buffer t))
+		    (skrf-give-links-backlinks))
 		(with-temp-buffer
 		  (write-region skrv-throw-string nil skrv-target-filename t)
 		  (insert-file-contents skrv-target-filename)
-		  (skrode-ify-buffer t)))
+		  (skrf-give-links-backlinks)))
 	      (skrf-delete-cellection)))))))
 
 (defun skrf-create-node-from-selection (skrv-new-node-name)
@@ -270,7 +271,9 @@ or a collection if one exists."
 	    (insert (skrf-text-to-link skrv-new-node-name))
 	    ;; re-skrode-ify the current buffer so that any links
 	    ;; removed from it are broken on their other ends
-	    (skrode-ify-buffer)
+	    ;; .... i don't think that would work
+	    ;; BUT i do wanna give the new link properties etc. i guess
+	    (skrf-give-links-properties)
 	    ;; and create buffer from new node just to skrode-ify-it so that
 	    ;; the the other ends of any links it may contain are created
 	    ;; pointing to the newly created node
@@ -278,7 +281,7 @@ or a collection if one exists."
 	      (insert-file-contents skrv-new-node-filename)
 	      ;; optional param means we're just making backlinks
 	      ;; not making text properties in the temp buffer itself
-			      (skrode-ify-buffer t))))))))
+	      (skrf-give-links-backlinks))))))))
 
 (defun skrode-filename-safe (node-name)
   "removes characters /,~,.,$ and extra whitespace from node names
@@ -297,7 +300,7 @@ full absolute file path"
 (defun check-skrode-title ()
   "prints warning if node's title and filename don't match"
   (if (not (string= buffer-file-name
-		    (expand-file-name (skrode-filename (skrf-node-node)))))
+		    (expand-file-name (skrode-filename (skrf-node-name)))))
       (display-warning 'skrode
 		       (concat "skrode file " buffer-file-name
 			       " has non-matching title " (skrf-node-name))
@@ -324,7 +327,7 @@ full absolute file path"
 		    (goto-char (point-min))
 		    (while (search-forward skrv-old-name nil t)
 		      (replace-match skrv-new-name t t)))
-		  (skrode-ify-buffer)
+		  (skrf-give-links-properties)
 		  (setq inhibit-modification-hooks nil))
 	      ;; otherwise, change link straight in the file
 	      (progn
@@ -398,12 +401,6 @@ full absolute file path"
   (setq inhibit-modification-hooks nil)
   (setq inhibit-read-only nil))
 
-(defun make-skrode-title (start-pos end-pos)
-  "sets skrode-node-name variable, and properties of displayed node title.
- checks against filename."
-  (check-skrode-title)
-  (make-skrode-title-trigger-rename-dialog start-pos end-pos))
-
 (defun find-start-of-broken-skrode-link-s (start-from-hook end-from-hook)
   "find the position from which to start breaking link(s) because of edit"
   ;; if the character before insertion/deletion is part of a link
@@ -447,7 +444,7 @@ say if node should be deleted"
     ;; call with the optional in-temp-buffer param
     ;; so properties are not created - only backlinks & the nodes containing them
     ;; when necessary
-    (skrode-ify-buffer t)))
+    (skrf-give-links-backlinks)))
 
 (defun break-other-side-of-skrode-link (link-target)
   "when a link is being broken, go to linked node and
@@ -631,11 +628,37 @@ if one does not exist already"
 	    (save-mark-and-excursion
 	      (goto-char (point-min))
 	      (put-skrode-backlink-in-distant-node this-node-name)
-	      (skrode-ify-buffer))) ;; so link is clickable immediately
+	      (skrf-give-links-properties))) ;; so link is clickable immediately
       ;; if node is not being visited in buffer - search & add link to file
       (with-temp-file linked-node-filename
 	(insert-file-contents linked-node-filename)
 	(put-skrode-backlink-in-distant-node this-node-name)))))
+
+(defun skrf-format-title ()
+  "checks that displayed title matches filename,
+and sets properties of displayed node title"
+    (save-mark-and-excursion
+      (goto-char (point-min))
+      (search-forward skrode-header-divider)
+      (check-skrode-title)
+      (make-skrode-title-trigger-rename-dialog 
+       (point-min) (- (point) (length skrode-header-divider)))))
+
+;; for all links in the current buffer
+;; that don't already have the skrode-link property
+(defun skrf-give-links-properties ()
+  (with-silent-modifications
+    (dolist (link-start-and-end (skrf-link-positions-in-buffer))
+      (if (text-property-not-all (car link-start-and-end) (cdr link-start-and-end)
+				 'skrode-link t)
+	  (make-skrode-link (car link-start-and-end) (cdr link-start-and-end))))))
+
+;; for all links in the current buffer
+(defun skrf-give-links-backlinks ()
+  (with-silent-modifications
+    (dolist (link-name (skrf-links-in-buffer))
+      (make-skrode-file link-name)
+      (make-skrode-backlink (skrode-filename link-name)))))
 
 ;; in skrode mode, call this function whenever node is opened or saved
 (defun skrode-ify-buffer (&optional in-temp-buffer)
@@ -643,31 +666,12 @@ if one does not exist already"
       ;; don't rely on making it a hook, bc hooks can run in any order
       (button-mode))
   (with-silent-modifications ;; bc we're only changing properties, not text
-    (save-mark-and-excursion
-      (goto-char (point-min))
-      (search-forward skrode-header-divider)
-
-      (if (not in-temp-buffer)
-	  (make-skrode-title (point-min)
-			     (- (point) (length skrode-header-divider))))
-    
-      ;; find each instance of  [[text like this]]
-      ;; search till end of buffer & if not found return nil
-      (while (search-forward "[[" nil t)
-	(let* ((button-start (- (point) 2))
-	       (button-end (search-forward "]]" nil t))
-	       (linked-node-name (skrf-link-to-text
-				  (buffer-substring-no-properties
-				   button-start button-end)))
-      	       (linked-node-filename (skrode-filename linked-node-name)))
-	  ;; if [[text like this]] isn't a link, make it into one
-	  (when (not (get-text-property (+ button-start 1) 'skrode-link))
-	    (if (not in-temp-buffer)
-	      (make-skrode-link button-start button-end))
-	      ;; and add title and backlink to linked node
-	    ;; if they don't already exist
-	    (make-skrode-file linked-node-name)
-	    (make-skrode-backlink linked-node-filename)))))))
+    (if (not in-temp-buffer)
+	(skrf-format-title)))
+  ;; add link properties to any link that doesn't already have them
+  ;; and backlinks
+  (if (not in-temp-buffer) (skrf-give-links-properties))
+  (skrf-give-links-backlinks))
 
 
 (define-derived-mode skrode-mode text-mode "Skrode"
