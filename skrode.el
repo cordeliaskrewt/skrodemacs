@@ -621,11 +621,11 @@ whether node's ~open~ or not"
 	  (insert (concat " " (skrf-text-to-link this-node-name))))))
   (skrf-unorphan-node))
 
-(defun make-skrode-backlink (linked-node-filename this-node-name)
-  "create link back to ~this~ node in ~linked-to~ node,
+(defun make-skrode-backlink (linked-node-filename)
+  "create link back to current node in ~linked-to~ node,
 if one does not exist already"
   (let ((linked-to-buffer (get-file-buffer linked-node-filename))
-	(this-node-name skrode-node-name))
+	(this-node-name (skrf-node-name)))
     (if linked-to-buffer
 	;; if the node is being visited in a buffer
 	;;search & add link to buffer
@@ -676,8 +676,7 @@ if one does not exist already"
 	      ;; and add title and backlink to linked node
 	    ;; if they don't already exist
 	    (make-skrode-file linked-node-name)
-	    (make-skrode-backlink linked-node-filename
-				  skrode-node-name)))))))
+	    (make-skrode-backlink linked-node-filename)))))))
 
 
 (define-derived-mode skrode-mode text-mode "Skrode"
