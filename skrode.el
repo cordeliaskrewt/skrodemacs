@@ -107,14 +107,13 @@
 (defun skrf-links-in-buffer (skrv-buf)
   (let ((link-positions (skrf-link-positions-in-buffer skrv-buf))
 	(link-names nil))
-    (dolist (position-pair link-positions)
+    (dolist (position-pair link-positions link-names)
       (push
        ;; link *positions* correctly contain the delimiters as well as the link text
        ;; the list of link names shouldn't
        (skrf-link-to-text
 	(buffer-substring-no-properties (car position-pair) (cdr position-pair)))
-       link-names))
-    link-names))
+       link-names))))
 
 ;; returns the node name of the current skrode buffer
 ;; useful mostly if the buffer's a temp buffer
