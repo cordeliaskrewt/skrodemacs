@@ -89,8 +89,7 @@
     ;; *? makes the regexp match any number of above characters, including none
     ;; (all the above needs to be double-checked with the manual to make sure)
     (save-mark-and-excursion
-      (goto-char (point-min))
-      (search-forward skrode-header-divider nil t)
+      (skrf-goto-body)
       (while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
 	;; save positions in match data as markers so that
 	;; they will continue to identify links after buffer is edited
@@ -122,13 +121,16 @@
 (defun skrf-node-name ()
   (let ((node-name
   (save-mark-and-excursion
-    (goto-char (point-min))
-    (search-forward skrode-header-divider nil t)
+    (skrf-goto-body)
     (skrf-link-to-text
      (buffer-substring-no-properties
       (point-min)
       (- (point) (length skrode-header-divider)))))))
     (if node-name node-name "")))
+
+(defun skrf-goto-body ()
+  (goto-char (point-min))
+  (search-forward skrode-header-divider nil t))
 
 (defun skrf-new-window ()
   ;; if autowin mode is enabled, return new window from autowin-new
@@ -191,8 +193,7 @@ from the skrode."
 	  ;; change backlinks to node-to-be-dumped to point to current buffer
 	  (rename-this-node-throughout-skrode skrv-target-node-name (skrf-node-name))
 	  ;; get body of node to be dumped as string
-	  (goto-char (point-min))
-	  (search-forward skrode-header-divider)
+	  (skrf-goto-body)
 	  (setq skrv-string-to-insert (buffer-substring (point) (point-max))))
 	;; insert body of node-to-be-dumped into current node at point
 	(insert skrv-string-to-insert)
@@ -316,8 +317,7 @@ full absolute file path"
   (let ((skrv-old-name (skrf-text-to-link old-node-name))
 	(skrv-new-name (skrf-text-to-link new-title)))
     (save-mark-and-excursion
-      (goto-char (point-min))
-      (search-forward skrode-header-divider)
+      (skrf-goto-body)
       ;; first find each link to change
       (let ((skrv-links-in-node-being-renamed (skrf-links-in-buffer (current-buffer))))
 	(dolist (node-with-backlink-to-change skrv-links-in-node-being-renamed)
@@ -428,8 +428,7 @@ full absolute file path"
 (defun skrf-node-orphan-p ()
   ;; advance past header
   (save-mark-and-excursion
-    (goto-char (point-min))
-    (search-forward skrode-header-divider)
+    (skrf-goto-body)
     ;; using skrf-link-positions-in-buffer rather than skrf-link-in-buffer
     ;; because skrf-links-in-buffer calls skrf-link-positions-in-buffer
     (not (skrf-link-positions-in-buffer (current-buffer)))))
@@ -553,8 +552,7 @@ and its reciprocal other end"
     (if skrv-target
 	(with-temp-buffer
 	  (insert-file-contents skrv-target)
-	  (goto-char (point-min))
-	  (search-forward skrode-header-divider)
+	  (skrf-goto-body)
 	  (buffer-substring-no-properties (point) (point-max))))))
 
 ;; (buffer-substring start end) is the whole link
@@ -645,8 +643,7 @@ if one does not exist already"
 and sets properties of displayed node title"
   (save-mark-and-excursion
     (with-silent-modifications
-      (goto-char (point-min))
-      (search-forward skrode-header-divider)
+      (skrf-goto-body)
       (check-skrode-title)
       (make-skrode-title-trigger-rename-dialog 
        (point-min) (- (point) (length skrode-header-divider))))))
