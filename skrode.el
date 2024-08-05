@@ -297,7 +297,7 @@ full absolute file path"
 (defun check-skrode-title ()
   "prints warning if node's title and filename don't match"
   (if (not (string= buffer-file-name
-		    (expand-file-name (skrode-filename (skrf-node-node)))))
+		    (expand-file-name (skrode-filename (skrf-node-name)))))
       (display-warning 'skrode
 		       (concat "skrode file " buffer-file-name
 			       " has non-matching title " (skrf-node-name))
