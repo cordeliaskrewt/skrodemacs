@@ -73,7 +73,7 @@
   (concat skrode-left-delimiter skrv-node-name skrode-right-delimiter))
 
 (defun skrf-link-to-text (skrv-link)
-  (if (>= (length skrf-link) (+ (length skrode-left-delimiter)
+  (if (>= (length skrv-link) (+ (length skrode-left-delimiter)
 				(length skrode-right-delimiter)))
   (substring skrv-link (length skrode-left-delimiter)
 	     (- (length skrode-right-delimiter)))))
