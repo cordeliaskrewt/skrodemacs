@@ -358,9 +358,7 @@ full absolute file path"
     (if (file-exists-p (skrode-filename old-node-name))
 	(delete-file (skrode-filename old-node-name)))
     ;; change the link in all the other nodes this node is linked to
-    (rename-this-node-throughout-skrode old-node-name new-title))
-    ;; and finally reset the internal name variable
-    (setq skrode-node-name new-title))
+    (rename-this-node-throughout-skrode old-node-name new-title)))
 
 ;; parameters begin and end are not used, but when function is invoked as an action from a button
 ;; they are sent automatically.  interactive invocation of the function (via key sequence) does not
@@ -647,18 +645,11 @@ if one does not exist already"
   (with-silent-modifications ;; bc we're only changing properties, not text
     (save-mark-and-excursion
       (goto-char (point-min))
-
-      ;; shouldn't have to re-make name every time we re-skrode-ify, but..
-      ;; we'll figure that out later i hope
-      (when (not skrode-node-name)
-	(re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
-	(setq skrode-node-name
-	      (skrf-link-to-text (match-string-no-properties 0)))
-	(if (not in-temp-buffer)
-	    (make-skrode-title
-	     (match-beginning 0) (match-end 0))))
-
       (search-forward skrode-header-divider)
+
+      (if (not in-temp-buffer)
+	  (make-skrode-title (point-min)
+			     (- (point) (length skrode-header-divider))))
     
       ;; find each instance of  [[text like this]]
       ;; search till end of buffer & if not found return nil
@@ -681,7 +672,6 @@ if one does not exist already"
 
 (define-derived-mode skrode-mode text-mode "Skrode"
   "a programmable personal knowledge base system" :interactive nil
-  (defvar-local skrode-node-name nil)
 ;;  (wc-mode t) - commented out since wc-mode doesn't work currently
   (add-hook 'skrode-mode-hook 'skrode-ify-buffer 0 t) ;; hooks are buffer-local
   (add-hook 'before-save-hook 'skrode-ify-buffer 0 t)
