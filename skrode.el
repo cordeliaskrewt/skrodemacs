@@ -59,6 +59,12 @@
        (define-key skrode-button-map [M-drag-mouse-1] 'ignore)
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
+(defmacro with-inhibit-modification-hooks (&rest body)
+  (append (list 'progn)
+	  (list '(setq inhibit-modification-hooks t))
+	  body
+	  (list '(setq inhibit-modification-hooks nil))))
+
 ;; creating a function to shadow forward-button
 ;; so display-message (default t) will not show help-echo in minibuffer
 (defun skrf-forward-button () (interactive)
@@ -198,7 +204,7 @@ from the skrode."
 	;; insert body of node-to-be-dumped into current node at point
 	(insert skrv-string-to-insert)
 	(skrf-give-links-properties)
-	(srkf-give-links-backlinks)
+	(skrf-give-links-backlinks)
 	;; finally, delete the dumped node's file
 	(delete-file skrv-target-filename)
 	;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
@@ -327,13 +333,16 @@ full absolute file path"
 		(with-current-buffer linked-to-buffer
 		  ;; so that search-and-replace
 		  ;; does not trigger link breaking etc.
-		  (setq inhibit-modification-hooks t)
+		  ;;		  (setq inhibit-modification-hooks t)
+		  (with-inhibit-modification-hooks
 		  (save-mark-and-excursion
 		    (goto-char (point-min))
 		    (while (search-forward skrv-old-name nil t)
 		      (replace-match skrv-new-name t t)))
 		  (skrf-give-links-properties)
-		  (setq inhibit-modification-hooks nil))
+		  )
+		  ;;		  (setq inhibit-modification-hooks nil))
+		  )
 	      ;; otherwise, change link straight in the file
 	      (progn
 		(make-skrode-file node-with-backlink-to-change)
@@ -349,15 +358,17 @@ full absolute file path"
     ;; rewriting the title lines and giving them the necessary properties
     ;; to make sure search-forward starts from the right place
     (goto-char (point-min))
-    (setq inhibit-modification-hooks t) ;; so we don't trigger rename dialog
+    ;;    (setq inhibit-modification-hooks t) ;; so we don't trigger rename dialog
+    (with-inhibit-modification-hooks
+    (setq inhibit-read-only t)
     (delete-region (point-min)
 		   (- (search-forward skrode-header-divider nil t) 21))
-    (setq inhibit-read-only t)
     (goto-char (point-min))
     (insert (skrf-text-to-link new-title))
-    ;; setting these variables back to their default state
-    (setq inhibit-modification-hooks nil)
     (setq inhibit-read-only nil)
+    ;; setting these variables back to their default state
+    ;;    (setq inhibit-modification-hooks nil)
+    )
     (make-skrode-title-trigger-rename-dialog (point-min) (point))
     ;; rename the file... and the buffer, so that it's visiting the new file
     (rename-file buffer-file-name (skrode-filename new-title))
@@ -385,7 +396,8 @@ full absolute file path"
 (defun make-skrode-title-trigger-rename-dialog (start-pos end-pos)
   "set up hooks so attempts to edit title will trigger node renaming dialogue"
   ;; so that adding properties doesn't trigger rename dialog!
-  (setq inhibit-modification-hooks t)
+  (with-inhibit-modification-hooks
+;;  (setq inhibit-modification-hooks t)
   (setq inhibit-read-only t) ;; or 'text is read-only' error
   (add-text-properties
    start-pos end-pos
@@ -404,7 +416,9 @@ full absolute file path"
 		       '(read-only t rear-nonsticky t))
   ;; reset variables back to their default state
   (setq inhibit-modification-hooks nil)
-  (setq inhibit-read-only nil))
+  ;;  (setq inhibit-read-only nil)
+  )
+  )
 
 (defun find-start-of-broken-skrode-link-s (start-from-hook end-from-hook)
   "find the position from which to start breaking link(s) because of edit"
@@ -472,7 +486,8 @@ say if node should be deleted"
     (start end start-modification-region end-modification-region)
   "do the work to break a single link"
   ;; gotta set this so remove doesn't call break-skrode-link
-  (setq inhibit-modification-hooks t)
+  ;;  (setq inhibit-modification-hooks t)
+  (with-inhibit-modification-hooks
   (let ((link-target (get-text-property start 'link-target))
 	(linked-node-name (get-text-property start 'link-text)))
     ;; remove all the text properties associated with a skrode link
@@ -491,7 +506,9 @@ say if node should be deleted"
 			    (search-forward (concat "[[" linked-node-name "]]")
 					    nil t))))
 	    (break-other-side-of-skrode-link link-target))))
-  (setq inhibit-modification-hooks nil))
+  ;;  (setq inhibit-modification-hooks nil)
+  )
+  )
 
 ;; called when user modifies a skrode link, breaking it
 ;; start and end define the part of the buffer that was modified
@@ -523,13 +540,16 @@ in other nodes."
 (defun make-skrode-link-break-on-edit-attempt (start end)
   "set up hooks so attempt to edit link will break both it
 and its reciprocal other end"
-  (setq inhibit-modification-hooks t)
+  ;;  (setq inhibit-modification-hooks t)
+  (with-inhibit-modification-hooks
   (add-text-properties start end '(modification-hooks (list break-skrode-link)))
   (add-text-properties (+ start 1) end
 		       '(insert-in-front-hooks (list break-skrode-link)))
   (add-text-properties start (- end 1)
 		       '(insert-behind-hooks (list break-skrode-link)))
-  (setq inhibit-modification-hooks nil))
+  )
+;;  (setq inhibit-modification-hooks nil)
+  )
 
 ;; written to be set as the 'action property of 'skrode-link buttons
 (defun skrf-open-node-in-same-window (skrv-button)
@@ -593,9 +613,11 @@ no other contents."
 (defun skrf-unorphan-node ()
   (let ((orphan-p nil))
     (while (search-forward (skrf-text-to-link skrode-orphans-node) nil t)
-      (setq inhibit-modification-hooks t)
-      (replace-match (skrf-text-to-broken-link skrode-orphans-node))
-      (setq inhibit-modification-hooks nil)
+      ;;      (setq inhibit-modification-hooks t)
+      (with-inhibit-modification-hooks
+       (replace-match (skrf-text-to-broken-link skrode-orphans-node))
+       )
+;;      (setq inhibit-modification-hooks nil)
       (setq orphan-p t))
     (if orphan-p
       (break-other-side-of-skrode-link (skrode-filename skrode-orphans-node)))))
@@ -638,7 +660,6 @@ if one does not exist already"
 	(put-skrode-backlink-in-distant-node this-node-name)))))
 
 (defun skrf-format-title ()
-  (message "in skrf-format-title")
   "checks that displayed title matches filename,
 and sets properties of displayed node title"
   (save-mark-and-excursion
