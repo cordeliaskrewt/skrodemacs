@@ -404,9 +404,9 @@ full absolute file path"
 						  (button-end button)))))
    ;; make header divider read-only
    (add-text-properties (+ end-pos 1) (+ end-pos 21)
-			'(read-only t rear-nonsticky t))
+			'(read-only t front-sticky t rear-nonsticky t))
    ;; reset variables back to their default state
-   (setq inhibit-modification-hooks nil)))
+   (setq inhibit-read-only nil)))
 
 (defun find-start-of-broken-skrode-link-s (start-from-hook end-from-hook)
   "find the position from which to start breaking link(s) because of edit"
