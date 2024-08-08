@@ -84,24 +84,25 @@
   (substring skrv-link (length skrode-left-delimiter)
 	     (- (length skrode-right-delimiter)))))
 
-;; returns list of positions of links from point in buffer to end
-;; (end of accessible portion of buffer if relevant)
-;; as (car.cdr) pairs of markers denoting (start.end) of links
-(defun skrf-link-positions-in-buffer (skrv-buf)
-  (let ((link-positions nil))
-    ;; \\ in string becomes \ in the regular expression
-    ;; \\ is needed to escape the literal [ characters for skrode-left-delimiter
-    ;; [[:ascii:][:nonascii:]] makes the regexp match any character, including newlines
-    ;; *? makes the regexp match any number of above characters, including none
-    ;; (all the above needs to be double-checked with the manual to make sure)
-    (save-mark-and-excursion
-      (skrf-goto-body)
-      (while (re-search-forward "\\[\\[[[:ascii:][:nonascii:]]*?]]" nil t)
-	;; save positions in match data as markers so that
-	;; they will continue to identify links after buffer is edited
-	(push (cons (copy-marker (match-beginning 0))
-		    (copy-marker (match-end 0)))
-	      link-positions))
+;; ;; returns list of positions of links from point in buffer to end
+;; ;; (end of accessible portion of buffer if relevant)
+;; ;; as (car.cdr) pairs of markers denoting (start.end) of links
+(defun skrf-link-positions-in-buffer ()
+  (save-mark-and-excursion
+    (skrf-goto-body)
+    (let ((link-positions nil)
+	  (start (search-forward skrode-left-delimiter nil t)))
+      (while (and start (setq end (search-forward skrode-right-delimiter nil t)))
+	(goto-char start)
+	(setq second-start (search-forward skrode-left-delimiter nil t))
+	(if (or (not second-start) (< end second-start))
+	    (progn
+	      (push (cons (- start (length skrode-left-delimiter))
+			  end) ;; we want the start of the start brackets
+		    ;; but the end of the end brackets to be saved to link-positions
+		    link-positions)
+	    (goto-char end))
+	  (setq start second-start)))
       link-positions)))
 
 ;; returns list of link names from point in buffer to end
@@ -109,8 +110,8 @@
 ;; calls skrf-link-positions-in-buffer
 ;; because getting the positions from the links would be *far* more difficult
 ;; and there's no reason to code the same work more than once
-(defun skrf-links-in-buffer (skrv-buf)
-  (let ((link-positions (skrf-link-positions-in-buffer skrv-buf))
+(defun skrf-links-in-buffer ()
+  (let ((link-positions (skrf-link-positions-in-buffer))
 	(link-names nil))
     (dolist (position-pair link-positions link-names)
       (push
@@ -325,7 +326,7 @@ full absolute file path"
     (save-mark-and-excursion
       (skrf-goto-body)
       ;; first find each link to change
-      (let ((skrv-links-in-node-being-renamed (skrf-links-in-buffer (current-buffer))))
+      (let ((skrv-links-in-node-being-renamed (skrf-links-in-buffer)))
 	(dolist (node-with-backlink-to-change skrv-links-in-node-being-renamed)
 	  (let ((linked-to-buffer (get-file-buffer (skrode-filename node-with-backlink-to-change))))
 	    ;; if link is open in a buffer, change the other node there
@@ -433,7 +434,7 @@ full absolute file path"
     (skrf-goto-body)
     ;; using skrf-link-positions-in-buffer rather than skrf-link-in-buffer
     ;; because skrf-links-in-buffer calls skrf-link-positions-in-buffer
-    (not (skrf-link-positions-in-buffer (current-buffer)))))
+    (not (skrf-link-positions-in-buffer))))
 
 (defun dealing-with-broken-skrode-link-target (this-node-name)
   "replace links to ~this~ node with broken links, and
@@ -514,7 +515,7 @@ in other nodes."
       (save-mark-and-excursion
 	(goto-char start-stretch)
 	(narrow-to-region start-stretch end-stretch)
-	(let ((positions-of-links-affected (skrf-link-positions-in-buffer (current-buffer))))
+	(let ((positions-of-links-affected (skrf-link-positions-in-buffer)))
 	  (widen)
 	  (dolist (positions-of-individual-link positions-of-links-affected)
 	    (break-individual-skrode-link (car positions-of-individual-link)
@@ -651,7 +652,7 @@ and sets properties of displayed node title"
 (defun skrf-give-links-properties ()
   ;; because we're only changing properties, not text
   (with-silent-modifications
-    (dolist (link-start-and-end (skrf-link-positions-in-buffer (current-buffer)))
+    (dolist (link-start-and-end (skrf-link-positions-in-buffer))
       (if (text-property-not-all (car link-start-and-end) (cdr link-start-and-end)
 				 'skrode-link t)
 	  (make-skrode-link (car link-start-and-end) (cdr link-start-and-end))))))
@@ -660,7 +661,7 @@ and sets properties of displayed node title"
 (defun skrf-give-links-backlinks ()
   ;; because we're only changing properties, not text
   (with-silent-modifications
-    (dolist (link-name (skrf-links-in-buffer (current-buffer)))
+    (dolist (link-name (skrf-links-in-buffer))
       (make-skrode-file link-name)
       (make-skrode-backlink (skrode-filename link-name)))))
 
