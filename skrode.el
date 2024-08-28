@@ -38,6 +38,8 @@
 	 'skrf-forward-button)
        (define-key skrode-mode-map (kbd "A-<tab>")
 	 'skrf-backward-button)
+       (define-key skrode-mode-map (kbd "C-z n")
+	 'skrf-jump-to-rename)
        (define-key skrode-mode-map (kbd "C-z c")
 	 'skrf-create-node-from-selection)
        (define-key skrode-mode-map (kbd "C-z t")
@@ -211,7 +213,7 @@ from the skrode."
       (let* ((skrv-target-node-name (get-text-property skrv-pt 'link-text))
 	     (skrv-string-to-insert "")
 	     ;; storing to variable here to use in with-temp-buffer
-	     (skrv-change-links-to (skrf-node-name)))
+	     (skrv-change-links-to skrode-node-name))
 	(with-temp-buffer
 	  (insert-file-contents (skrode-filename skrv-target-node-name))
 	  ;; change backlinks to node-to-be-dumped to point to current buffer
@@ -299,7 +301,7 @@ or a collection if one exists."
 			  skrv-new-node-filename t)
 	    ;; at end of new node, add link back to the current buffer
 	    (write-region (concat "\n\n"
-				  (skrf-text-to-link (skrf-node-name)))
+				  (skrf-text-to-link skrode-node-name))
 			  nil skrv-new-node-filename t)
 	    ;; remove selected text from the current (source) node
 	    (skrf-delete-cellection)
@@ -337,10 +339,10 @@ full absolute file path"
   "prints warning if node's title and filename don't match"
   (setq skrode-node-name (skrf-node-name))
   (if (not (string= buffer-file-name
-		    (expand-file-name (skrode-filename (skrf-node-name)))))
+		    (expand-file-name (skrode-filename skrode-node-name))))
       (display-warning 'skrode
 		       (concat "skrode file " buffer-file-name
-			       " has non-matching title " (skrf-node-name))
+			       " has non-matching title " skrode-node-name)
 		       :error)))
 
 (defun rename-this-node-throughout-skrode (old-node-name new-title)
@@ -449,6 +451,19 @@ if not, node will revert to previous name."))
       (goto-char skrv-prev-pos)
     (skrf-rewrite-name skrv-old-name)))
 
+(defun skrf-jump-to-rename ()
+  (interactive)
+  (setq skrode-rename-jump-restore (list (point) (pop-mark) (window-start)))
+  (add-hook 'skrf-rename-jump-hook 'skrf-jump-back-from-rename 0 t)
+  (goto-char (point-min)))
+
+(defun skrf-jump-back-from-rename ()
+  (goto-char (car skrode-rename-jump-restore))
+  (push-mark (cadr skrode-rename-jump-restore))
+  (set-window-start nil (caddr skrode-rename-jump-restore) nil)
+  (setq skrode-rename-jump-restore nil)
+  (remove-hook 'skrf-rename-jump-hook 'skrf-jump-back-from-rename t))
+
 ;; the value of the special text property 'cursor-special-functions
 ;; has to have these three parameters. skrv-win is not used.
 ;; entered-or-left can have two values: 'entered or 'left
@@ -478,7 +493,8 @@ if not, node will revert to previous name."))
 		 " are not allowed in node names. ")
 	 skrv-corrected-name skrode-node-name skrv-pos))
        (t (skrf-rename-resume-or-revert
-	   "" skrv-corrected-name skrode-node-name skrv-pos)))))
+	   "" skrv-corrected-name skrode-node-name skrv-pos))))
+    (run-hooks 'skrf-rename-jump-hook))
   (setq cursor-sensor-inhibit nil))
 
 (defun skrf-propertize-title ()
@@ -564,7 +580,7 @@ say if node should be deleted"
   "when a link is being broken, go to linked node and
  break link(s) back to this node"
   (let ((target-node-buffer (get-file-buffer link-target))
-	(this-node-name (skrf-node-name)))
+	(this-node-name skrode-node-name))
     ;; if linked node is being visited by a buffer, break link in buffer
     (if target-node-buffer
 	(with-current-buffer target-node-buffer
@@ -736,7 +752,7 @@ whether node's ~open~ or not"
   "create link back to current node in ~linked-to~ node,
 if one does not exist already"
   (let ((linked-to-buffer (get-file-buffer linked-node-filename))
-	(this-node-name (skrf-node-name)))
+	(this-node-name skrode-node-name))
     (if linked-to-buffer
 	;; if the node is being visited in a buffer
 	;;search & add link to buffer
@@ -781,7 +797,10 @@ and sets properties of displayed node title"
   (button-mode) ;; manual call because hooks can run in any order
   (cursor-sensor-mode) ;; so that cursor-sensor-functions will work
   (defvar-local skrode-node-name ""
-    "variable to hold old node name during renaming process")
+    "variable to hold old node name during renaming process. \
+accessed to get current node name at other times.")
+  (defvar-local skrf-rename-jump-hook nil)
+  (defvar-local skrode-rename-jump-restore nil)
   (skrf-format-title)
   (skrf-eval-links))
 
