@@ -338,12 +338,39 @@ full absolute file path"
 (defun check-skrode-title ()
   "prints warning if node's title and filename don't match"
   (setq skrode-node-name (skrf-node-name))
+  ;; if node name contains forbidden sequences, remove them
+  (let ((clean-name (car (skrf-clean-name skrode-node-name))))
+    (when (not (string= skrode-node-name clean-name))
+      (skrf-rewrite-name clean-name)
+      (setq skrode-node-name (skrf-node-name))))
   (if (not (string= buffer-file-name
 		    (expand-file-name (skrode-filename skrode-node-name))))
       (display-warning 'skrode
 		       (concat "skrode file " buffer-file-name
 			       " has non-matching title " skrode-node-name)
 		       :error)))
+
+(defun skrf-display-header (&optional skrv-win skrv-display-start)
+  "displays node title in header line if first line of file is not visible.
+also makes header line clickable to edit node title."
+  (if (not skrv-win) (setq skrv-win (selected-window)))
+  (with-current-buffer (window-buffer skrv-win)
+    (when (eq major-mode 'skrode-mode)
+      (if (not skrv-display-start) (setq skrv-display-start (window-start)))
+      ;; if start of file is not displayed in window
+      (if (> skrv-display-start 1)
+	  ;; if node name is not currently in header line, add it
+	  (if (not (member skrode-node-name header-line-format))
+	      (push
+	       (propertize skrode-node-name 'keymap
+			   (let ((map (make-sparse-keymap)))
+			     (define-key map [header-line mouse-1]
+			       'skrf-jump-to-rename)
+			     map))
+	       header-line-format))
+	;; if start of file is displayed, remove name from header line
+	(setq header-line-format
+	      (delete skrode-node-name header-line-format))))))
 
 (defun rename-this-node-throughout-skrode (old-node-name new-title)
   "change link to current node in all the nodes it's linked to"
@@ -453,7 +480,10 @@ if not, node will revert to previous name."))
 
 (defun skrf-jump-to-rename ()
   (interactive)
-  (setq skrode-rename-jump-restore (list (point) (pop-mark) (window-start)))
+  (if (and (listp last-input-event) (eq (car last-input-event) 'mouse-1))
+    (select-window (caadr last-input-event)))
+  (setq skrode-rename-jump-restore
+	(list (point) (pop-mark) (window-start)))
   (add-hook 'skrf-rename-jump-hook 'skrf-jump-back-from-rename 0 t)
   (goto-char (point-min)))
 
@@ -799,8 +829,14 @@ and sets properties of displayed node title"
   (defvar-local skrode-node-name ""
     "variable to hold old node name during renaming process. \
 accessed to get current node name at other times.")
+  ;; variables needed to edit node name from anywhere in file
+  ;; and return automatically to previous point when done editing name
   (defvar-local skrf-rename-jump-hook nil)
   (defvar-local skrode-rename-jump-restore nil)
+  ;; default depth of 0, t makes it a buffer local hook
+  (add-hook 'window-scroll-functions 'skrf-display-header 0 t)
+  (add-hook 'window-buffer-change-functions 'skrf-display-header 0 t)
+  (face-remap-add-relative 'header-line 'skrode-name)
   (skrf-format-title)
   (skrf-eval-links))
 
@@ -817,3 +853,5 @@ accessed to get current node name at other times.")
   )
 
 (provide 'skrode)
+
+
