@@ -100,12 +100,6 @@
 (defun skrf-text-to-link (skrv-node-name)
   (concat skrode-left-delimiter skrv-node-name skrode-right-delimiter))
 
-(defun skrf-link-to-text (skrv-link)
-  (if (>= (length skrv-link) (+ (length skrode-left-delimiter)
-				(length skrode-right-delimiter)))
-  (substring skrv-link (length skrode-left-delimiter)
-	     (- (length skrode-right-delimiter)))))
-
 ;; returns list of positions of links in buffer
 ;; as (car.cdr) pairs of markers denoting (start.end) of links
 (defun skrf-link-positions-in-buffer ()
@@ -141,7 +135,7 @@
        ;; link *positions* correctly contain the delimiters
        ;; as well as the link text
        ;; the list of link names shouldn't
-       (skrf-link-to-text
+       (skrf-remove-link-delims
 	(buffer-substring-no-properties (car position-pair)
 					(cdr position-pair)))
        link-names))))
@@ -213,7 +207,7 @@ from the skrode."
       (let* ((skrv-target-node-name (get-text-property skrv-pt 'link-text))
 	     (skrv-string-to-insert "")
 	     ;; storing to variable here to use in with-temp-buffer
-	     (skrv-change-links-to skrode-node-name))
+	     (skrv-change-links-to (skrf-node-name)))
 	(with-temp-buffer
 	  (insert-file-contents (skrode-filename skrv-target-node-name))
 	  ;; change backlinks to node-to-be-dumped to point to current buffer
@@ -301,7 +295,7 @@ or a collection if one exists."
 			  skrv-new-node-filename t)
 	    ;; at end of new node, add link back to the current buffer
 	    (write-region (concat "\n\n"
-				  (skrf-text-to-link skrode-node-name))
+				  (skrf-text-to-link (skrf-node-name)))
 			  nil skrv-new-node-filename t)
 	    ;; remove selected text from the current (source) node
 	    (skrf-delete-cellection)
@@ -610,7 +604,7 @@ say if node should be deleted"
   "when a link is being broken, go to linked node and
  break link(s) back to this node"
   (let ((target-node-buffer (get-file-buffer link-target))
-	(this-node-name skrode-node-name))
+	(this-node-name (skrf-node-name)))
     ;; if linked node is being visited by a buffer, break link in buffer
     (if target-node-buffer
 	(with-current-buffer target-node-buffer
@@ -717,7 +711,7 @@ and its reciprocal other end"
 (defun make-skrode-link (start end)
   "turns [[text in double square brackets]] into a link to a skrode node
 of that name"
-  (let ((skrv-link (skrf-link-to-text (buffer-substring start end))))
+  (let ((skrv-link (skrf-remove-link-delims (buffer-substring start end))))
     (make-text-button
      start end
      'skrode-link t
@@ -782,7 +776,7 @@ whether node's ~open~ or not"
   "create link back to current node in ~linked-to~ node,
 if one does not exist already"
   (let ((linked-to-buffer (get-file-buffer linked-node-filename))
-	(this-node-name skrode-node-name))
+	(this-node-name (skrf-node-name)))
     (if linked-to-buffer
 	;; if the node is being visited in a buffer
 	;;search & add link to buffer
