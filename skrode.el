@@ -60,14 +60,6 @@
        (define-key skrode-button-map [M-drag-mouse-1] 'ignore)
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
-(defvar skrode-title-line-keymap nil)
-(progn (setq skrode-title-line-keymap (make-sparse-keymap))
-       (set-keymap-parent skrode-title-line-keymap skrode-mode-map)
-       ;; instead of 'enter' inserting a new line in the title line
-       ;; it should leave the title line for the start of the node body
-       (define-key skrode-title-line-keymap (kbd "RET")
-	 'forward-line))
-
 (defmacro with-inhibit-modification-hooks (&rest body)
   (append (list 'progn)
 	  (list '(setq inhibit-modification-hooks t))
