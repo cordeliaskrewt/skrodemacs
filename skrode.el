@@ -241,56 +241,40 @@ linked at point. creates and removes backlinks as needed."
 	      (skrf-give-links-backlinks)))
 	  (skrf-delete-cellection)))))
 
-(defun skrf-create-node-from-selection (skrv-new-node-name)
-  "Creates a new node from a text selection in an existing skrode node.
-or a collection if one exists."
-  ;; interactive allows a function to be called by a key sequence
-  ;; the code character s in its string argument
-  ;; captures and passes a value to this function's argument
-  (interactive
-   "senter new node's name (empty string to cancel node creation) "
-   skrode-mode)
-  ;; if no region is selected, exit function with an error message
-  (let ((skrv-new-node-contents (skrf-cellect-string)))
-    (if (not skrv-new-node-contents)
-	(message "cannot make node from selection when there is no selection")
-  ;; first set up the variables with which to make the new node
-      (let ((skrv-new-node-filename (skrode-filename skrv-new-node-name)))
-	(if (not skrv-new-node-name) (message "node creation cancelled")
-	  (if (file-exists-p skrv-new-node-filename)
-	      (message (concat "node with title" skrv-new-node-name
-			       "already exists"))
-	    ;; if the user entered a usable node title, create the new node
-	    (skrf-make-file skrv-new-node-name)
-	    ;; append selected region of current buffer to the new node
-	    (write-region skrv-new-node-contents nil
-			  skrv-new-node-filename t)
-	    ;; at end of new node, add link back to the current buffer
-	    (write-region (concat "\n\n"
-				  (skrf-text-to-link (skrf-node-name)))
-			  nil skrv-new-node-filename t)
-	    ;; remove selected text from the current (source) node
-	    (skrf-delete-cellection)
-	    ;; and put a link to the new node in its place
-	    (insert (skrf-text-to-link skrv-new-node-name))
-	    ;; re-skrode-ify the current buffer so that any links
-	    ;; removed from it are broken on their other ends
-	    ;; .... i don't think that would work
-	    ;; BUT i do wanna give the new link properties etc. i guess
-	    (skrf-give-links-properties)
-	    ;; and create buffer from new node just to skrode-ify-it so that
-	    ;; the the other ends of any links it may contain are created
-	    ;; pointing to the newly created node
-	    (with-temp-buffer
-	      (insert-file-contents skrv-new-node-filename)
-	      ;; optional param means we're just making backlinks
-	      ;; not making text properties in the temp buffer itself
-	      (skrf-give-links-backlinks))))))))
+(defun skrf-create-node-from-selection (new-node-name)
+  "creates a new node from selection."
+  ;; the code character s in interactive's string argument
+  ;; captures and passes a string to this function's argument
+  (interactive "senter new node name (empty string to cancel node creation) ")
+  (let ((new-node-body (skrf-cellect-string))
+	(new-node-filename
+	 (if new-node-name (skrode-filename new-node-name) "")))
+    (cond
+     ((not new-node-name) (message "node creation cancelled"))
+     ((not new-node-body)
+      (message "cannot make node from selection when there is no selection"))
+     ((file-exists-p new-node-filename)
+      (message (concat "node " new-node-filename " already exists")))
+     (t (skrf-make-file new-node-name)	
+	;; if usable node title and selection exist, create the new node
+	;; including a link back to the current node at the end
+	(write-region
+	 (concat new-node-body "\n\n" (skrf-text-to-link skrode-node-name))
+	 nil new-node-filename)
+	;; use temp buffer to create any backlinks to new node
+	(with-temp-buffer (insert-file-contents new-node-filename)
+			  (skrf-give-links-backlinks))
+	;; remove selected text from the current node
+	(skrf-delete-cellection)
+	;; and put a link to the new node in its place
+	(insert (skrf-text-to-link new-node-name))
+	(skrf-give-links-properties)))))
 
 (defun skrode-filename-safe (node-name)
   "removes characters /,~,.,$ and extra whitespace from node names
  to make safe file names"
   ;; should i be using string-replace instead for escape sequences???
+  ;; file names also can't be too long!!!
   (remove ?/ (remove ?~ (remove ?. (remove ?$
 					   (string-clean-whitespace
 					    node-name))))))
