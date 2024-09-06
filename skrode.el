@@ -186,32 +186,33 @@ into links to the current buffer's node, and deletes the linked node
 from the skrode."
   (interactive "d") ;; get position of cursor as function argument
   ;; check if point is on a link
-  (let ((skrv-target-filename (get-text-property skrv-pt 'link-target)))
-    (when skrv-target-filename
-      (let* ((skrv-target-node-name (get-text-property skrv-pt 'link-text))
-	     (skrv-string-to-insert "")
-	     ;; storing to variable here to use in with-temp-buffer
-	     (skrv-change-links-to (skrf-node-name)))
-	(with-temp-buffer
-	  (insert-file-contents (skrode-filename skrv-target-node-name))
-	  ;; change backlinks to node-to-be-dumped to point to current buffer
-	  (rename-this-node-throughout-skrode
-	   skrv-target-node-name skrv-change-links-to)
-	  ;; get body of node to be dumped as string
-	  (setq skrv-string-to-insert (buffer-substring (point) (point-max))))
-	;; remove link after generating string-to-insert so dumped node is never orphaned
+  (let* ((skrv-target-node-name (get-text-property skrv-pt 'link-text))
+	 (skrv-target-filename (skrode-filename skrv-target-node-name))
+	 (skrv-string-to-insert "")
+	 ;; storing to variable here to use in with-temp-buffer
+	 (skrv-change-links-to (skrf-node-name)))
+    (when skrv-target-node-name
+      (with-temp-buffer
+	(insert-file-contents skrv-target-filename)
+	;; change backlinks to node-to-be-dumped to point to current buffer
+	(rename-this-node-throughout-skrode
+	 skrv-target-node-name skrv-change-links-to)
+	;; get body of node to be dumped as string
+	(setq skrv-string-to-insert (buffer-substring (point) (point-max))))
+      ;; remove link after generating string-to-insert so dumped node is never orphaned
 	(delete-region (button-start skrv-pt) (button-end skrv-pt))
 	;; insert body of node-to-be-dumped into current node at point
 	(insert skrv-string-to-insert)
 	(skrf-give-links-properties)
 	(skrf-give-links-backlinks)
 	;; finally, delete the dumped node's file
-	(delete-file skrv-target-filename)
+	(delete-file skrv-target-file-name)
 	;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
 	(when (get-file-buffer skrv-target-filename)
 	  (with-current-buffer (get-file-buffer skrv-target-filename)
+	    ;; so that kill-buffer will not ask user for confirmation
 	    (restore-buffer-modified-p nil)
-	    (kill-buffer)))))))
+	    (kill-buffer))))))
 
 (defun skrf-cellect-string ()
   (if (boundp 'textcollect-mode)
