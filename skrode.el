@@ -180,36 +180,35 @@
     (switch-to-buffer skrv-buf)))
 
 (defun skrf-dump-from-node (skrv-pt)
-  "converts a link into a broken link and writes the contents of its node
-under it into the current buffer.  also changes all links to the linked node
-into links to the current buffer's node, and deletes the linked node
-from the skrode."
+  "replaces a link at point with the contents of the linked-to node.
+deletes linked-to node, replaces all links to it with links to
+the current node."
   (interactive "d") ;; get position of cursor as function argument
-  ;; check if point is on a link
-  (let* ((skrv-target-node-name (get-text-property skrv-pt 'link-text))
-	 (skrv-target-filename (skrode-filename skrv-target-node-name))
-	 (skrv-string-to-insert "")
-	 ;; storing to variable here to use in with-temp-buffer
-	 (skrv-change-links-to (skrf-node-name)))
-    (when skrv-target-node-name
+  ;; if point is on a link, that's the target node name and file
+  (let* ((target-node-name (get-text-property skrv-pt 'link-text))
+	 (target-filename (skrode-filename target-node-name))
+	 (target-as-string "")
+	 ;; storing the value here to use in with-temp-buffer
+	 (current-node-name (skrf-node-name)))
+    (when target-node-name
       (with-temp-buffer
-	(insert-file-contents skrv-target-filename)
+	(insert-file-contents target-filename)
 	;; change backlinks to node-to-be-dumped to point to current buffer
-	(rename-this-node-throughout-skrode
-	 skrv-target-node-name skrv-change-links-to)
+	(rename-this-node-throughout-skrode target-node-name
+					    current-node-name)
 	;; get body of node to be dumped as string
-	(setq skrv-string-to-insert (buffer-substring (point) (point-max))))
-      ;; remove link after generating string-to-insert so dumped node is never orphaned
-	(delete-region (button-start skrv-pt) (button-end skrv-pt))
-	;; insert body of node-to-be-dumped into current node at point
-	(insert skrv-string-to-insert)
-	(skrf-give-links-properties)
-	(skrf-give-links-backlinks)
-	;; finally, delete the dumped node's file
-	(delete-file skrv-target-file-name)
-	;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
-	(when (get-file-buffer skrv-target-filename)
-	  (with-current-buffer (get-file-buffer skrv-target-filename)
+	(setq target-as-string (buffer-substring (point) (point-max))))
+      ;; remove link after saving its body as a string so that string
+      ;; doesn't have temporary link orphans node
+      (delete-region (button-start skrv-pt) (button-end skrv-pt))
+      ;; insert body of node-to-be-dumped into current node at point
+      (insert target-as-string)
+      (skrf-eval-links)
+      ;; finally, delete the dumped node's file
+      (delete-file target-filename)
+      ;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
+      (if (get-file-buffer target-filename)
+	  (with-current-buffer (get-file-buffer target-filename)
 	    ;; so that kill-buffer will not ask user for confirmation
 	    (restore-buffer-modified-p nil)
 	    (kill-buffer))))))
@@ -228,26 +227,26 @@ from the skrode."
 	(delete-region (region-beginning) (region-end)))))
 
 (defun skrf-throw-into-node (skrv-pt)
-  "writes selected region from current buffer into the node pointed to by the
-link the cursor is on, if any.  creates and removes backlinks as needed."
+  "removes selected region from current node and appends it to the node
+linked at point. creates and removes backlinks as needed."
   (interactive "d") ;; get position of cursor as function argument
-  ;; check if point is on a link
-  (let ((skrv-target-filename (get-text-property skrv-pt 'link-target)))
-    (if skrv-target-filename
-	(let ((skrv-throw-string (skrf-cellect-string)))
-	  (if skrv-throw-string
-	    (let ((skrv-target-buf (get-file-buffer skrv-target-filename)))
-	      (if skrv-target-buf
-		  (with-current-buffer skrv-target-buf
-		    (goto-char (point-max))
-		    (insert skrv-throw-string)
-		    (skrf-give-links-properties)
-		    (skrf-give-links-backlinks))
-		(with-temp-buffer
-		  (write-region skrv-throw-string nil skrv-target-filename t)
-		  (insert-file-contents skrv-target-filename)
-		  (skrf-give-links-backlinks)))
-	      (skrf-delete-cellection)))))))
+  ;; check if point is on a link  
+  (let ((target-filename
+	 (skrode-filename (get-text-property skrv-pt 'link-text)))
+	(throw-string (skrf-cellect-string)))
+    (if (and target-filename skrv-throw-string)
+	(let ((target-buf (get-file-buffer target-filename)))
+	  (if target-buf
+	      (with-current-buffer target-buf
+		(goto-char (point-max))
+		(insert throw-string)
+		(skrf-give-links-properties)
+		(skrf-give-links-backlinks))
+	    (with-temp-buffer
+	      (write-region throw-string nil target-filename t)
+	      (insert-file-contents target-filename)
+	      (skrf-give-links-backlinks)))
+	  (skrf-delete-cellection)))))
 
 (defun skrf-create-node-from-selection (skrv-new-node-name)
   "Creates a new node from a text selection in an existing skrode node.
