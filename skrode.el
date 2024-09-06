@@ -94,6 +94,7 @@
 ;; as (car.cdr) pairs of markers denoting (start.end) of links
 (defun skrf-link-positions-in-buffer ()
   (save-mark-and-excursion
+    (goto-char (point-min))
     (let ((link-positions nil)
 	  (start (search-forward skrode-left-delimiter nil t)))
       (while (and start
@@ -140,19 +141,6 @@
    ;; but the node name should *not* contain a newline at the end!!
    (buffer-substring-no-properties (point-min) (- (skrf-first-newline) 1)))
 
-(defun skrf-new-window ()
-  ;; if autowin mode is enabled, return new window from autowin-new
-  (if (boundp 'autowin-mode) (autowin-new)
-    ;; if autowin mode is not enabled
-    ;; split current window in half to create and return a new window
-    ;; note that height & width are measured here in chars rather than pixels
-    ;; so not comparable one-to-one
-    ;; but the bias to split into columns over rows might be about right
-    (if (> (window-total-height) (window-total-width))
-	(split-window)
-      ;; if window is wider than tall, return right half of current window
-      (split-window nil nil t))))
-
 ;; wraparound function to call skrf-open-node-in-new-window
 ;; using mouse position to find link
 (defun skrf-open-node-in-new-window-from-click ()
@@ -171,13 +159,18 @@
 	  (skrf-open-node-in-new-window
 	   (button-get skrv-button 'link-target)))))
 
-;; opens skrv-filename in a newly created window
 (defun skrf-open-node-in-new-window (skrv-filename)
-  (let ((skrv-buf (current-buffer)))
-    (set-window-buffer (skrf-new-window) (find-file skrv-filename))
-  ;; find-file opens target in both current window & split window
-  ;; so skrv-buf sets current window back to the state it was in
-    (switch-to-buffer skrv-buf)))
+  "opens skrode file SKRV-FILENAME in a newly created window."
+  (set-window-buffer
+   ;; use autowin mode to make the new window if it's present
+   (if (boundp 'autowin-mode) (autowin-new)
+     ;; if not - if current window is more chars tall than wide
+     ;; the new window is the bottom half of the current window
+     ;; otherwise it's the right half
+     (if (> (window-total-height) (window-total-width))
+	 (split-window)
+       (split-window nil nil t)))
+   (find-file-noselect skrv-filename)))
 
 (defun skrf-dump-from-node (skrv-pt)
   "replaces a link at point with the contents of the linked-to node.
@@ -234,7 +227,7 @@ linked at point. creates and removes backlinks as needed."
   (let ((target-filename
 	 (skrode-filename (get-text-property skrv-pt 'link-text)))
 	(throw-string (skrf-cellect-string)))
-    (if (and target-filename skrv-throw-string)
+    (if (and target-filename throw-string)
 	(let ((target-buf (get-file-buffer target-filename)))
 	  (if target-buf
 	      (with-current-buffer target-buf
