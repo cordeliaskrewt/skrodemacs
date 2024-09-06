@@ -15,8 +15,6 @@
 
 (defconst skrode-directory "~/skrode/" "where we keep the skrode files")
 (defconst skrode-extension ".skrd" "skrode nodes end with this extension")
-(defconst skrode-header-divider "\n------------------\n\n"
-  "a skrode node consists of a title, this divider, and a body")
 (defconst skrode-left-delimiter "[[")
 (defconst skrode-right-delimiter "]]")
 (defconst skrode-left-delimiter-broken "[-[")
@@ -104,7 +102,6 @@
 ;; as (car.cdr) pairs of markers denoting (start.end) of links
 (defun skrf-link-positions-in-buffer ()
   (save-mark-and-excursion
-    (skrf-goto-body)
     (let ((link-positions nil)
 	  (start (search-forward skrode-left-delimiter nil t)))
       (while (and start
@@ -147,15 +144,10 @@
 		  (string-replace skrode-right-delimiter "" skrv-string)))
 
 (defun skrf-node-name ()
-  (skrf-remove-link-delims
    ;; the function skrf-first-newline is needed to delimit the title field
    ;; but the node name should *not* contain a newline at the end!!
-   (buffer-substring-no-properties (point-min) (- (skrf-first-newline) 1))))
+   (buffer-substring-no-properties (point-min) (- (skrf-first-newline) 1)))
 
-(defun skrf-goto-body ()
-  (goto-char (point-min))
-  (end-of-line))
-  
 (defun skrf-new-window ()
   ;; if autowin mode is enabled, return new window from autowin-new
   (if (boundp 'autowin-mode) (autowin-new)
@@ -211,17 +203,12 @@ from the skrode."
 	(with-temp-buffer
 	  (insert-file-contents (skrode-filename skrv-target-node-name))
 	  ;; change backlinks to node-to-be-dumped to point to current buffer
-	  (rename-this-node-throughout-skrode skrv-target-node-name
-					      skrv-change-links-to)
+	  (rename-this-node-throughout-skrode
+	   skrv-target-node-name skrv-change-links-to)
 	  ;; get body of node to be dumped as string
-	  (skrf-goto-body)
 	  (setq skrv-string-to-insert (buffer-substring (point) (point-max))))
-	;; remove link and replace it in situ with broken link
-	;; after generating string-to-insert so dumped node is never orphaned
+	;; remove link after generating string-to-insert so dumped node is never orphaned
 	(delete-region (button-start skrv-pt) (button-end skrv-pt))
-	(insert (skrf-text-to-broken-link skrv-target-node-name))
-	;; newline to separate node-to-be-dumped's title from its body
-	(insert "\n")
 	;; insert body of node-to-be-dumped into current node at point
 	(insert skrv-string-to-insert)
 	(skrf-give-links-properties)
@@ -371,7 +358,6 @@ also makes header line clickable to edit node title."
   (let ((skrv-old-name (skrf-text-to-link old-node-name))
 	(skrv-new-name (skrf-text-to-link new-title)))
     (save-mark-and-excursion
-      (skrf-goto-body)
       ;; first find each link to change
       (let ((skrv-links-in-node-being-renamed (skrf-links-in-buffer)))
 	(dolist (node-with-backlink-to-change
@@ -580,9 +566,7 @@ if not, node will revert to previous name."))
 
 ;; returns t if current node has no non-broken skrode links, nil otherwise
 (defun skrf-node-orphan-p ()
-  ;; advance past header
   (save-mark-and-excursion
-    (skrf-goto-body)
     ;; using skrf-link-positions-in-buffer rather than skrf-link-in-buffer
     ;; because skrf-links-in-buffer calls skrf-link-positions-in-buffer
     (not (skrf-link-positions-in-buffer))))
@@ -703,8 +687,7 @@ and its reciprocal other end"
     (if skrv-target
 	(with-temp-buffer
 	  (insert-file-contents skrv-target)
-	  (skrf-goto-body)
-	  (buffer-substring-no-properties (point) (point-max))))))
+	  (buffer-substring-no-properties (point-min) (point-max))))))
 
 ;; (buffer-substring start end) is the whole link
 ;; including both right and left link delimiters
