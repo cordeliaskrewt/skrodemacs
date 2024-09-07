@@ -179,7 +179,7 @@ the current node."
   (interactive "d") ;; get position of cursor as function argument
   ;; if point is on a link, that's the target node name and file
   (let* ((target-node-name (get-text-property skrv-pt 'link-text))
-	 (target-filename (skrode-filename target-node-name))
+	 (target-filename (skrf-filename target-node-name))
 	 (target-as-string "")
 	 ;; storing the value here to use in with-temp-buffer
 	 (current-node-name (skrf-node-name)))
@@ -225,7 +225,7 @@ linked at point. creates and removes backlinks as needed."
   (interactive "d") ;; get position of cursor as function argument
   ;; check if point is on a link  
   (let ((target-filename
-	 (skrode-filename (get-text-property skrv-pt 'link-text)))
+	 (skrf-filename (get-text-property skrv-pt 'link-text)))
 	(throw-string (skrf-cellect-string)))
     (if (and target-filename throw-string)
 	(let ((target-buf (get-file-buffer target-filename)))
@@ -248,7 +248,7 @@ linked at point. creates and removes backlinks as needed."
   (interactive "senter new node name (empty string to cancel node creation) ")
   (let ((new-node-body (skrf-cellect-string))
 	(new-node-filename
-	 (if new-node-name (skrode-filename new-node-name) "")))
+	 (if new-node-name (skrf-filename new-node-name) "")))
     (cond
      ((not new-node-name) (message "node creation cancelled"))
      ((not new-node-body)
@@ -270,20 +270,14 @@ linked at point. creates and removes backlinks as needed."
 	(insert (skrf-text-to-link new-node-name))
 	(skrf-give-links-properties)))))
 
-(defun skrode-filename-safe (node-name)
-  "removes characters /,~,.,$ and extra whitespace from node names
- to make safe file names"
-  ;; should i be using string-replace instead for escape sequences???
-  ;; file names also can't be too long!!!
-  (remove ?/ (remove ?~ (remove ?. (remove ?$
-					   (string-clean-whitespace
-					    node-name))))))
-
-(defun skrode-filename (link-text)
-  "gives the corresponding file name for a skrode node -
-full absolute file path"
-  (concat skrode-directory (skrode-filename-safe link-text)
-	  skrode-extension))
+(defun skrf-filename (skrv-name)
+  "gives the corresponding full absolute file path for a skrode node name"
+  (let ((node-name
+	 (string-clean-whitespace
+	  (seq-take skrv-name (- 255 (length skrode-extension))))))
+    (dolist (chr '(?/?~?.?$?:?*?\\?>?<?\|?\"??))
+      (setq node-name (remove chr node-name)))
+    (concat skrode-directory node-name skrode-extension)))
 
 (defun check-skrode-title ()
   "prints warning if node's title and filename don't match"
@@ -294,7 +288,7 @@ full absolute file path"
       (skrf-rewrite-name clean-name)
       (setq skrode-node-name (skrf-node-name))))
   (if (not (string= buffer-file-name
-		    (expand-file-name (skrode-filename skrode-node-name))))
+		    (expand-file-name (skrf-filename skrode-node-name))))
       (display-warning 'skrode
 		       (concat "skrode file " buffer-file-name
 			       " has non-matching title " skrode-node-name)
@@ -332,7 +326,7 @@ also makes header line clickable to edit node title."
 	(dolist (node-with-backlink-to-change
 		 skrv-links-in-node-being-renamed)
 	  (let ((linked-to-buffer
-		 (get-file-buffer (skrode-filename
+		 (get-file-buffer (skrf-filename
 				   node-with-backlink-to-change))))
 	    ;; if link is open in a buffer, change the other node there
 	    (if linked-to-buffer
@@ -348,8 +342,8 @@ also makes header line clickable to edit node title."
 	      ;; otherwise, change link straight in the file
 	      (progn
 		(skrf-make-file node-with-backlink-to-change)
-		(with-temp-file (skrode-filename node-with-backlink-to-change)
-		  (insert-file-contents (skrode-filename
+		(with-temp-file (skrf-filename node-with-backlink-to-change)
+		  (insert-file-contents (skrf-filename
 					 node-with-backlink-to-change))
 		  (while (search-forward skrv-old-name nil t)
 		    (replace-match skrv-new-name t t)))))))))))
@@ -357,11 +351,11 @@ also makes header line clickable to edit node title."
 (defun skrf-rename-node (skrv-new-name skrv-old-name)
   "makes all the changes necessary to rename a skrode node"
   ;; rename the file... and the buffer, so that it's visiting the new file
-  (rename-file buffer-file-name (skrode-filename skrv-new-name))
+  (rename-file buffer-file-name (skrf-filename skrv-new-name))
   ;; WARNING, set-visited-file-name appears to clobber buffer-local variables
-  (set-visited-file-name (skrode-filename skrv-new-name) nil t)
-  (if (file-exists-p (skrode-filename skrv-old-name))
-      (delete-file (skrode-filename skrv-old-name)))
+  (set-visited-file-name (skrf-filename skrv-new-name) nil t)
+  (if (file-exists-p (skrf-filename skrv-old-name))
+      (delete-file (skrf-filename skrv-old-name)))
   ;; change the link in all the other nodes this node is linked to
   (rename-this-node-throughout-skrode skrv-old-name skrv-new-name)
   (setq skrode-node-name (skrf-node-name))
@@ -459,7 +453,7 @@ if not, node will revert to previous name."))
        ((string= skrv-displayed-name skrode-node-name))
        ((string= skrv-corrected-name skrode-node-name)
 	(skrf-rewrite-name skrv-corrected-name))
-       ((file-exists-p (skrode-filename skrv-corrected-name))
+       ((file-exists-p (skrf-filename skrv-corrected-name))
 	(skrf-reject-name (concat "node with name " skrv-corrected-name
 				  " already exists. ")
 			  skrode-node-name skrv-pos))
@@ -670,7 +664,7 @@ of that name"
      'link-text skrv-link
      ;; had to assign this statically, not as a function
      ;; so link could be broken after it's been modified
-     'link-target (skrode-filename skrv-link)
+     'link-target (skrf-filename skrv-link)
      'keymap skrode-button-map
      'action 'skrf-open-node-in-same-window
      'help-echo 'skrf-preview-node))
@@ -679,7 +673,7 @@ of that name"
 (defun skrf-make-file (linked-node-name)
   "if linked-to node does not exist, create it with appropriate title.
 no other contents."
-  (let ((linked-node-filename (skrode-filename linked-node-name)))
+  (let ((linked-node-filename (skrf-filename linked-node-name)))
     (if (not (file-exists-p linked-node-filename))
 	(write-region
 	 ;; to use write-region w string instead of buffer, 2nd param is nil
@@ -702,7 +696,7 @@ no other contents."
 	 (replace-match (skrf-text-to-broken-link skrode-orphans-node)))
 	(setq orphan-p t))
       (if orphan-p
-	  (break-other-side-of-skrode-link (skrode-filename
+	  (break-other-side-of-skrode-link (skrf-filename
 					    skrode-orphans-node))))))
 
 (defun put-skrode-backlink-in-distant-node (this-node-name)
@@ -767,7 +761,7 @@ and sets properties of displayed node title"
   (with-silent-modifications
     (dolist (link-name (skrf-links-in-buffer))
       (skrf-make-file link-name)
-      (make-skrode-backlink (skrode-filename link-name)))))
+      (make-skrode-backlink (skrf-filename link-name)))))
 
 (defun skrf-open-node ()
   (button-mode) ;; manual call because hooks can run in any order
