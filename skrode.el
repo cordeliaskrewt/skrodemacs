@@ -279,21 +279,6 @@ linked at point. creates and removes backlinks as needed."
       (setq node-name (remove chr node-name)))
     (concat skrode-directory node-name skrode-extension)))
 
-(defun check-skrode-title ()
-  "prints warning if node's title and filename don't match"
-  (setq skrode-node-name (skrf-node-name))
-  ;; if node name contains forbidden sequences, remove them
-  (let ((clean-name (car (skrf-clean-name skrode-node-name))))
-    (when (not (string= skrode-node-name clean-name))
-      (skrf-rewrite-name clean-name)
-      (setq skrode-node-name (skrf-node-name))))
-  (if (not (string= buffer-file-name
-		    (expand-file-name (skrf-filename skrode-node-name))))
-      (display-warning 'skrode
-		       (concat "skrode file " buffer-file-name
-			       " has non-matching title " skrode-node-name)
-		       :error)))
-
 (defun skrf-display-header (&optional skrv-win skrv-display-start)
   "displays node title in header line if first line of file is not visible.
 also makes header line clickable to edit node title."
@@ -737,11 +722,22 @@ if one does not exist already"
 	(insert-file-contents linked-node-filename)
 	(put-skrode-backlink-in-distant-node this-node-name)))))
 
-(defun skrf-format-title ()
-  "checks that displayed title matches filename,
-and sets properties of displayed node title"
-      (check-skrode-title)
-      (skrf-propertize-title))
+(defun skrf-check-name ()
+  "checks that node name matches filename"
+  (setq skrode-node-name (skrf-node-name))
+  ;; remove any forbidden chars and sequences from the node name
+  (let ((clean-name (car (skrf-clean-name skrode-node-name))))
+    (when (not (string= skrode-node-name clean-name))
+      (skrf-rewrite-name clean-name)
+      (setq skrode-node-name (skrf-node-name))))
+  ;; buffer-file-name and expand-file-name return full absolute path
+  (when (not (string= buffer-file-name
+		      (expand-file-name (skrf-filename skrode-node-name))))
+    (display-warning
+     'skrode
+     (concat "skrode file " buffer-file-name
+	     " has non-matching name " skrode-node-name)
+     :error)))
 
 ;; for all links in the current buffer
 ;; that don't already have the skrode-link property
@@ -777,7 +773,8 @@ accessed to get current node name at other times.")
   (add-hook 'window-scroll-functions 'skrf-display-header 0 t)
   (add-hook 'window-buffer-change-functions 'skrf-display-header 0 t)
   (face-remap-add-relative 'header-line 'skrode-name)
-  (skrf-format-title)
+  (skrf-check-name)
+  (skrf-propertize-title)
   (skrf-eval-links))
 
 (defun skrf-eval-links ()
