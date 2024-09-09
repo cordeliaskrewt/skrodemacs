@@ -673,19 +673,24 @@ no other contents."
 	  skrode-right-delimiter-broken))
 
 ;; if current buffer contains a link to the skrode orphans node
-;; break both that link
-;; and any link in the skrode orphans node back to the current node
+;; remove that link
+;; and break any link in the skrode orphans node back to the current node
+;; ideally link to current node should be REMOVED from orphans node too
+;; also i don't need to check if a link to orphans node exists
+;; i can simply replace such links with "" through the whole current node
+;; and replace links to current node with "" in skrode-orphans node
+;; whether any such links exist or not
 (defun skrf-unorphan-node ()
   (save-mark-and-excursion
     (goto-char (point-min))
     (let ((orphan-p nil))
       (while (search-forward (skrf-text-to-link skrode-orphans-node) nil t)
 	(with-inhibit-modification-hooks
-	 (replace-match (skrf-text-to-broken-link skrode-orphans-node)))
+	 (replace-match ""))
 	(setq orphan-p t))
       (if orphan-p
-	  (break-other-side-of-skrode-link (skrf-filename
-					    skrode-orphans-node))))))
+	  (break-other-side-of-skrode-link
+	   (skrf-filename skrode-orphans-node))))))
 
 (defun put-skrode-backlink-in-distant-node (this-node-name)
   "a helper function for make-skrode-backlink, to be called
