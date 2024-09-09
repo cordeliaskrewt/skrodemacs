@@ -61,10 +61,8 @@
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
 (defmacro with-inhibit-modification-hooks (&rest body)
-  (append (list 'progn)
-	  (list '(setq inhibit-modification-hooks t))
-	  body
-	  (list '(setq inhibit-modification-hooks nil))))
+  `(let ((inhibit-modification-hooks t))
+     ,@body))
 
 ;; creating a function to shadow forward-button
 ;; so display-message (default t) will not show help-echo in minibuffer
@@ -159,9 +157,7 @@
 	  (skrf-open-node-in-new-window
 	   (button-get skrv-button 'link-target)))))
 
-(defun skrf-open-node-in-new-window (skrv-filename)
-  "opens skrode file SKRV-FILENAME in a newly created window."
-  (set-window-buffer
+(defun skrf-new-window ()
    ;; use autowin mode to make the new window if it's present
    (if (boundp 'autowin-mode) (autowin-new)
      ;; if not - if current window is more chars tall than wide
@@ -169,8 +165,11 @@
      ;; otherwise it's the right half
      (if (> (window-total-height) (window-total-width))
 	 (split-window)
-       (split-window nil nil t)))
-   (find-file-noselect skrv-filename)))
+       (split-window nil nil t))))
+
+(defun skrf-open-node-in-new-window (skrv-filename)
+  "opens skrode file SKRV-FILENAME in a newly created window."
+  (set-window-buffer (skrf-new-window) (find-file-noselect skrv-filename)))
 
 (defun skrf-dump-from-node (skrv-pt)
   "replaces a link at point with the contents of the linked-to node.
@@ -279,6 +278,7 @@ linked at point. creates and removes backlinks as needed."
       (setq node-name (remove chr node-name)))
     (concat skrode-directory node-name skrode-extension)))
 
+;; what arguments function gets depends on what hook calls function
 (defun skrf-display-header (&optional skrv-win skrv-display-start)
   "displays node title in header line if first line of file is not visible.
 also makes header line clickable to edit node title."
@@ -461,7 +461,8 @@ if not, node will revert to previous name."))
     (add-text-properties
      (point-min)
      (skrf-first-newline)
-     (list 'cursor-sensor-functions '(list skrf-new-node-name)
+     (list 'skrode-name t
+	   'cursor-sensor-functions '(list skrf-new-node-name)
 	   ;; so pressing enter triggers leaving the title line
 	   ;; rather than creating a newline
 	   'keymap
@@ -579,29 +580,31 @@ say if node should be deleted"
 (defun break-skrode-link (start end)
   "turn edited links into plain text. and break other ~ends~ of these links,
 in other nodes."
-  ;; check if the edit occurred in the middle of a single link
-  ;; if so, only break that one.
-  (if (and (get-text-property (- start 1) 'skrode-link)
-	   (get-text-property end 'skrode-link)
-	   (string-equal (get-text-property (- start 1) 'link-target)
-			 (get-text-property end 'link-target)))
-      (break-individual-skrode-link (button-start (- start 1))
-				    (button-end end)
-				    (button-start (- start 1))
-				    (button-end end))
-  ;; if not, find  the part of the buffer i want to break links in
-  (let ((start-stretch (find-start-of-broken-skrode-link-s start end))
-	(end-stretch (find-end-of-broken-skrode-link-s start end)))
-    ;; and go through affected stretch of buffer looking for links to break
-      (save-mark-and-excursion
-	(goto-char start-stretch)
-	(narrow-to-region start-stretch end-stretch)
-	(let ((positions-of-links-affected (skrf-link-positions-in-buffer)))
-	  (widen)
-	  (dolist (positions-of-individual-link positions-of-links-affected)
-	    (break-individual-skrode-link (car positions-of-individual-link)
-					  (cdr positions-of-individual-link)
-					  start-stretch end-stretch)))))))
+  ;; if hook is called while buffer's not in skrode mode, do nothing
+  (if (eq major-mode 'skrode-mode)
+      ;; check if the edit occurred in the middle of a single link
+      ;; if so, only break that one.
+      (if (and (get-text-property (- start 1) 'skrode-link)
+	       (get-text-property end 'skrode-link)
+	       (string-equal (get-text-property (- start 1) 'link-target)
+			     (get-text-property end 'link-target)))
+	  (break-individual-skrode-link (button-start (- start 1))
+					(button-end end)
+					(button-start (- start 1))
+					(button-end end))
+	;; if not, find  the part of the buffer i want to break links in
+	(let ((start-stretch (find-start-of-broken-skrode-link-s start end))
+	      (end-stretch (find-end-of-broken-skrode-link-s start end)))
+	  ;; and go through affected stretch of buffer looking for links to break
+	  (save-mark-and-excursion
+	    (goto-char start-stretch)
+	    (narrow-to-region start-stretch end-stretch)
+	    (let ((positions-of-links-affected (skrf-link-positions-in-buffer)))
+	      (widen)
+	      (dolist (positions-of-individual-link positions-of-links-affected)
+		(break-individual-skrode-link (car positions-of-individual-link)
+					      (cdr positions-of-individual-link)
+					      start-stretch end-stretch))))))))
 
 (defun make-skrode-link-break-on-edit-attempt (start end)
   "set up hooks so attempt to edit link will break both it
@@ -759,6 +762,29 @@ if one does not exist already"
       (skrf-make-file link-name)
       (make-skrode-backlink (skrf-filename link-name)))))
 
+(defun skrf-link-yank-handler (prop-val start end)
+  (if prop-val
+      (remove-text-properties
+       start end
+       '(skrode-link nil link-text nil link-target nil keymap nil
+		     action nil help-echo nil
+		     modification-hooks nil insert-in-front-hooks nil
+		     insert-behind-hooks nil))))
+
+(defun skrf-name-yank-handler (prop-val start end)
+  (if prop-val
+      (remove-text-properties
+       start end
+       '(skrode-name nil cursor-sensor-functions nil keymap nil front-sticky nil
+		     rear-nonsticky nil))))
+
+(defun skrf-name-boundary-yank-handler (prop-val start end)
+  (if prop-val
+      (remove-text-properties
+       start end
+       '(read-only nil keymap nil rear-nonsticky nil
+		   skrode-name-boundary nil))))
+
 (defun skrf-open-node ()
   (button-mode) ;; manual call because hooks can run in any order
   (cursor-sensor-mode) ;; so that cursor-sensor-functions will work
@@ -769,6 +795,12 @@ accessed to get current node name at other times.")
   ;; and return automatically to previous point when done editing name
   (defvar-local skrf-rename-jump-hook nil)
   (defvar-local skrode-rename-jump-restore nil)
+  (if (not (member '(skrode-link . skrf-link-yank-handler) yank-handled-properties))
+      (push '(skrode-link . skrf-link-yank-handler) yank-handled-properties))
+  (if (not (member '(skrode-name . skrf-name-yank-handler) yank-handled-properties))
+      (push '(skrode-link . skrf-name-yank-handler) yank-handled-properties))
+  (if (not (member '(skrode-name-boundary . skrf-name-boundary-yank-handler) yank-handled-properties))
+      (push '(skrode-link . skrf-name-boundary-yank-handler) yank-handled-properties))
   ;; default depth of 0, t makes it a buffer local hook
   (add-hook 'window-scroll-functions 'skrf-display-header 0 t)
   (add-hook 'window-buffer-change-functions 'skrf-display-header 0 t)
@@ -790,5 +822,3 @@ accessed to get current node name at other times.")
   )
 
 (provide 'skrode)
-
-
