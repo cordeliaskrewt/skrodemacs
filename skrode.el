@@ -370,6 +370,10 @@ also makes header line clickable to edit node title."
 	   ;; $ matches newline or end of string
 	   ;; this works bc newlines were deleted first
 	   ("[\s\t\v]*$" . "trailing whitespace characters")
+	   ;; would be nice to change this to use skrf-remove-link-delimiters
+	   ;; also skrf-remove-broken-link-delimiters
+	   ;; even though it couldn't use the replace-regexp in the dolist that way
+	   ;; in the interests of removing literals with variables 100% of the time
 	   ("\\[\\[\\|]]" . "link delimiters"))))
     (dolist (prob possible-problems)
       (let ((cleaner-name (replace-regexp-in-string (car prob) "" skrv-name)))
@@ -384,7 +388,7 @@ also makes header line clickable to edit node title."
     (cons skrv-name err-str)))
 
 (defun skrf-rename-resume-or-revert
-    (skrv-err-str skrv-proposed-name skrv-old-name skrv-prev-pos)
+    (skrv-err-str skrv-proposed-name skrv-old-name)
   (let* ((read-answer-short t) (use-dialog-box t)
 	 (ans (read-answer
 	       (concat skrv-err-str "rename node to " skrv-proposed-name
@@ -394,17 +398,26 @@ also makes header line clickable to edit node title."
 		 ("cancel" ?q "let node revert to previous name")))))
     (cond
      ((string= ans "rename")
-      (if (not (string= "" skrv-err-str))
-	  (skrf-rewrite-name skrv-proposed-name))
+      (skrf-rewrite-name skrv-proposed-name)
       (skrf-rename-node skrv-proposed-name skrv-old-name))
-     ((string= ans "keep editing") (goto-char skrv-prev-pos))
+     ((string= ans "keep editing")
+      (skrf-keep-editing-name (skrf-node-name)))
      ((string= ans "cancel") (skrf-rewrite-name skrv-old-name)))))
 
-(defun skrf-reject-name (skrv-err-str skrv-old-name skrv-prev-pos)
+(defun skrf-reject-name (skrv-err-str skrv-old-name)
   (if (y-or-n-p (concat skrv-err-str "keep editing name? \
 if not, node will revert to previous name."))
-      (goto-char skrv-prev-pos)
+      (skrf-keep-editing-name (skrf-node-name))
     (skrf-rewrite-name skrv-old-name)))
+
+(defun skrf-keep-editing-name (skrv-proposed-name)
+  (let ((new-name
+	 (read-string "rename node to (empty string to cancel renaming): " skrv-proposed-name)))
+    (if (string= new-name "")
+	(skrf-rewrite-name skrode-node-name)
+      ;; to keep displayed name and proposed name always in sync
+      (skrf-rewrite-name new-name)
+      (skrf-check-before-rename new-name))))
 
 (defun skrf-jump-to-rename ()
   (interactive)
@@ -422,36 +435,38 @@ if not, node will revert to previous name."))
   (setq skrode-rename-jump-restore nil)
   (remove-hook 'skrf-rename-jump-hook 'skrf-jump-back-from-rename t))
 
+(defun skrf-check-before-rename (skrv-proposed-name)
+  (let* ((clean-name-and-message (skrf-clean-name skrv-proposed-name))
+	 (skrv-corrected-name (car clean-name-and-message)))
+    (cond
+     ((string= skrv-proposed-name skrode-node-name))
+     ((string= skrv-corrected-name skrode-node-name)
+      (skrf-rewrite-name skrv-corrected-name))
+     ((file-exists-p (skrf-filename skrv-corrected-name))
+      (skrf-reject-name (concat "node with name " skrv-corrected-name
+				" already exists. ")
+			skrode-node-name))
+     ((string= skrv-corrected-name "")
+      (skrf-reject-name (concat "node must have name. ")
+			skrode-node-name))
+     ((cdr clean-name-and-message)
+      (skrf-rename-resume-or-revert
+       (concat (cdr clean-name-and-message)
+	       " are not allowed in node names. ")
+       skrv-corrected-name skrode-node-name))
+     (t (skrf-rename-node skrv-proposed-name skrode-node-name)))))
+
 ;; the value of the special text property 'cursor-special-functions
-;; has to have these three parameters. skrv-win is not used.
+;; has to have these three parameters. skrv-win and skrv-pos are not used.
 ;; entered-or-left can have two values: 'entered or 'left
-(defun skrf-new-node-name (skrv-win skrv-pos entered-or-left)
+(defun skrf-attempt-rename (skrv-win skrv-pos entered-or-left)
   (setq cursor-sensor-inhibit t)
   (when (eq entered-or-left 'left)
     (let* ((skrv-displayed-name
 	    (buffer-substring-no-properties
 	     (point-min)
-	     (next-single-property-change (point-min) 'skrode-name-boundary)))
-	   (clean-name-and-message (skrf-clean-name skrv-displayed-name))
-	   (skrv-corrected-name (car clean-name-and-message)))
-      (cond
-       ((string= skrv-displayed-name skrode-node-name))
-       ((string= skrv-corrected-name skrode-node-name)
-	(skrf-rewrite-name skrv-corrected-name))
-       ((file-exists-p (skrf-filename skrv-corrected-name))
-	(skrf-reject-name (concat "node with name " skrv-corrected-name
-				  " already exists. ")
-			  skrode-node-name skrv-pos))
-       ((string= skrv-corrected-name "")
-	(skrf-reject-name (concat "node must have name. ")
-			  skrode-node-name skrv-pos))
-       ((cdr clean-name-and-message)
-	(skrf-rename-resume-or-revert
-	 (concat (cdr clean-name-and-message)
-		 " are not allowed in node names. ")
-	 skrv-corrected-name skrode-node-name skrv-pos))
-       (t (skrf-rename-resume-or-revert
-	   "" skrv-corrected-name skrode-node-name skrv-pos))))
+       	     (next-single-property-change (point-min) 'skrode-name-boundary))))
+      (skrf-check-before-rename skrv-displayed-name))
     (run-hooks 'skrf-rename-jump-hook))
   (setq cursor-sensor-inhibit nil))
 
@@ -462,7 +477,7 @@ if not, node will revert to previous name."))
      (point-min)
      (skrf-first-newline)
      (list 'skrode-name t
-	   'cursor-sensor-functions '(list skrf-new-node-name)
+	   'cursor-sensor-functions '(list skrf-attempt-rename)
 	   ;; so pressing enter triggers leaving the title line
 	   ;; rather than creating a newline
 	   'keymap
@@ -672,25 +687,22 @@ no other contents."
   (concat skrode-left-delimiter-broken skrv-link-text
 	  skrode-right-delimiter-broken))
 
-;; if current buffer contains a link to the skrode orphans node
-;; remove that link
-;; and break any link in the skrode orphans node back to the current node
-;; ideally link to current node should be REMOVED from orphans node too
-;; also i don't need to check if a link to orphans node exists
-;; i can simply replace such links with "" through the whole current node
-;; and replace links to current node with "" in skrode-orphans node
-;; whether any such links exist or not
+;; if current buffer contains a link to the skrode orphans node,  remove that link
+;; and any link in the skrode orphans node back to the current node
 (defun skrf-unorphan-node ()
-  (save-mark-and-excursion
-    (goto-char (point-min))
-    (let ((orphan-p nil))
-      (while (search-forward (skrf-text-to-link skrode-orphans-node) nil t)
-	(with-inhibit-modification-hooks
-	 (replace-match ""))
-	(setq orphan-p t))
-      (if orphan-p
-	  (break-other-side-of-skrode-link
-	   (skrf-filename skrode-orphans-node))))))
+  (if (replace-string-in-region (skrf-text-to-link skrode-orphans-node)
+				"" (point-min) (point-max))
+      (let ((orphans-node-buffer
+	     (get-file-buffer (skrf-filename skrode-orphans-node))))
+	(if orphans-node-buffer
+	    (with-current-buffer orphans-node-buffer
+	      (replace-string-in-region
+	       (skrf-text-to-link (skrf-node-name))
+	       "" (point-min) (point-max)))
+	  (if (file-exists-p (skrf-filename skrode-orphans-node))
+	      (with-temp-file (skrf-filename skrode-orphans-node)
+		(replace-string-in-region (skrf-text-to-link (skrf-node-name))
+					  "" (point-min) (point-max))))))))
 
 (defun put-skrode-backlink-in-distant-node (this-node-name)
   "a helper function for make-skrode-backlink, to be called
@@ -815,6 +827,16 @@ accessed to get current node name at other times.")
   (skrf-eval-links))
 
 (defun skrf-eval-links ()
+  ;; if displayed node name and saved node name are different
+  (if (not (string=
+	    (skrf-node-name)
+	    (let ((filename (buffer-file-name)))
+	      (with-temp-buffer
+		(insert-file-contents filename)
+		(skrf-node-name)))))
+      ;; check and possibly change node name first
+      ;; only proceed with saving if displayed node name is a legal node name
+      (skrf-attempt-rename (selected-window) (point) 'left))
   ;; add link properties to any link that doesn't already have them
   (skrf-give-links-properties)
   ;; add a backlink to any link that doesn't have one
