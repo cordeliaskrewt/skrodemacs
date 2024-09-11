@@ -473,6 +473,11 @@ if not, node will revert to previous name."))
 (defun skrf-propertize-title ()
   (setq inhibit-read-only t)
   (let ((buffer-modified-flag (buffer-modified-p)))
+    ;; visible properties should end with name text, not after it
+    (add-text-properties
+     (point-min)
+     (if (> (skrf-first-newline) 1) (- (skrf-first-newline) 1) 1)
+     '(face skrode-name))
     (add-text-properties
      (point-min)
      (skrf-first-newline)
@@ -484,16 +489,17 @@ if not, node will revert to previous name."))
 	   (let ((map (make-sparse-keymap)))
 	     (set-keymap-parent map (get-text-property (point-min) 'keymap))
 	     (define-key map (kbd "RET") 'forward-line) map)
-	   'face 'skrode-name
 	   'front-sticky
 	   (append (get-text-property (point-min) 'front-sticky)
 		   '(cursor-sensor-functions keymap face))
+	   ;; face property does not extend past name text
+	   ;; so it needs to be rear-sticky to apply to typing after end of name
 	   'rear-nonsticky
 	   (append (get-text-property (point-min) 'rear-nonsticky)
-		   '(cursor-sensor-functions keymap face))))
-    (if (> (skrf-first-newline) 1)
-	(add-text-properties
-	 (- (skrf-first-newline) 1) (skrf-first-newline)
+		   '(cursor-sensor-functions keymap))))
+    (add-text-properties
+     (if (> (skrf-first-newline) 1) (- (skrf-first-newline) 1) 1)
+     (skrf-first-newline)
 	 (list
 	  'read-only "cannot delete or overwrite boundary of title line"
 	  ;; so one cannot accidentally right-arrow out of the title line
@@ -506,7 +512,7 @@ if not, node will revert to previous name."))
 	  'rear-nonsticky
 	  (append
 	   (get-text-property (- (skrf-first-newline) 1) 'rear-nonsticky)
-	   '(read-only keymap skrode-name-boundary)))))
+	   '(read-only keymap skrode-name-boundary))))
         (restore-buffer-modified-p buffer-modified-flag))
   (setq inhibit-read-only nil))
 
