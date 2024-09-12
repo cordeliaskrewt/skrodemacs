@@ -60,6 +60,28 @@
        (define-key skrode-button-map [M-drag-mouse-1] 'ignore)
        (define-key skrode-button-map [M-drag-mouse-2] 'ignore))
 
+;; Node names cache for autocomplete
+(defvar skrode-node-names-cache nil)
+
+(defun init-skrode-node-names-cache ()
+  "Initialize the skrode node names cache, if not already initialized."
+  (if (not skrode-node-names-cache)
+      (setq skrode-node-names-cache
+            (mapcar #'file-name-sans-extension
+                    (directory-files
+                     skrode-directory nil
+                     (concat
+                      "\\`[^.]+" (regexp-quote skrode-extension) "\\'"))))))
+
+(defun intern-to-skrode-names-cache (node-name)
+  "Intern a new node name into the skrode node names cache."
+  (add-to-list 'skrode-node-names-cache node-name))
+
+(defun evict-from-skrode-names-cache (node-name)
+  "Remove a node name from the skrode node names cache, if it exists there."
+  (setq skrode-node-names-cache
+        (delete node-name skrode-node-names-cache)))
+
 (defmacro with-inhibit-modification-hooks (&rest body)
   `(let ((inhibit-modification-hooks t))
      ,@body))
@@ -254,7 +276,7 @@ linked at point. creates and removes backlinks as needed."
       (message "cannot make node from selection when there is no selection"))
      ((file-exists-p new-node-filename)
       (message (concat "node " new-node-filename " already exists")))
-     (t (skrf-make-file new-node-name)	
+     (t (skrf-make-file new-node-name)
 	;; if usable node title and selection exist, create the new node
 	;; including a link back to the current node at the end
 	(write-region
@@ -344,6 +366,9 @@ also makes header line clickable to edit node title."
   ;; change the link in all the other nodes this node is linked to
   (rename-this-node-throughout-skrode skrv-old-name skrv-new-name)
   (setq skrode-node-name (skrf-node-name))
+  ;; update the cache
+  (evict-from-skrode-names-cache skrv-old-name)
+  (intern-to-skrode-names-cache skrode-node-name)
   ;; save-buffer has to come after the backlinks have been changed
   ;; or it will simply duplicate every backlink
   (save-buffer))
@@ -684,9 +709,11 @@ of that name"
 no other contents."
   (let ((linked-node-filename (skrf-filename linked-node-name)))
     (if (not (file-exists-p linked-node-filename))
-	(write-region
-	 ;; to use write-region w string instead of buffer, 2nd param is nil
-	 (concat linked-node-name "\n") nil linked-node-filename))))
+        (progn
+	  (write-region
+	   ;; to use write-region w string instead of buffer, 2nd param is nil
+	   (concat linked-node-name "\n") nil linked-node-filename)
+          (intern-to-skrode-names-cache linked-node-name)))))
 
 (defun skrf-text-to-broken-link (skrv-link-text)
   "turns this string into [-[that string]-]"
@@ -809,6 +836,7 @@ if one does not exist already"
 		   skrode-name-boundary nil))))
 
 (defun skrf-open-node ()
+  (init-skrode-node-names-cache)
   (button-mode) ;; manual call because hooks can run in any order
   (cursor-sensor-mode) ;; so that cursor-sensor-functions will work
   (defvar-local skrode-node-name ""
