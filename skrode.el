@@ -1,4 +1,5 @@
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;[[foo1]]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; to use skrode mode, put these lines into your .emacs file
 ;;
 ;; (require 'skrode)
@@ -15,6 +16,7 @@
 
 (defconst skrode-directory "~/skrode/" "where we keep the skrode files")
 (defconst skrode-extension ".skrd" "skrode nodes end with this extension")
+(defconst skrode-history-node "Skrode History")
 (defconst skrode-left-delimiter "[[")
 (defconst skrode-right-delimiter "]]")
 (defconst skrode-left-delimiter-broken "[-[")
@@ -81,6 +83,9 @@
   "Remove a node name from the skrode node names cache, if it exists there."
   (setq skrode-node-names-cache
         (delete node-name skrode-node-names-cache)))
+
+(defun skrf-is-special-node (node-name)
+  (string= node-name skrode-history-node))
 
 (defmacro with-inhibit-modification-hooks (&rest body)
   `(let ((inhibit-modification-hooks t))
@@ -842,6 +847,20 @@ if one does not exist already"
   ;; also remove 'skrode-name face if present, but not all faces
   (face-remap-remove-relative skrode-name-face-unmap))
 
+(defun skrf-record-visit (node-name)
+  "Log a visit to a skrode node in the history special node."
+  (let* ((log (concat skrode-directory skrode-history-node skrode-extension))
+         (entry (concat skrode-left-delimiter node-name skrode-right-delimiter "\n"))
+         (header (concat skrode-history-node "\n"))
+         (header-skip-length (+ 1 (length header))))
+    (with-temp-buffer
+      (if (not (file-exists-p log))
+          (insert header)
+        (insert-file-contents log))
+      (goto-char header-skip-length)
+      (insert entry)
+      (write-region (point-min) (point-max) log))))
+
 (defun skrf-open-node ()
   (init-skrode-node-names-cache)
   (button-mode) ;; manual call because hooks can run in any order
@@ -865,9 +884,12 @@ accessed to get current node name at other times.")
     (defvar-local skrode-name-face-unmap skrookie))  
   (skrf-check-name)
   (skrf-propertize-title)
-  (skrf-eval-links))
+  (defvar-local is-special-node (skrf-is-special-node skrode-node-name))
+  (skrf-eval-links is-special-node)
+  (if (not is-special-node)
+      (skrf-record-visit skrode-node-name)))
 
-(defun skrf-eval-links ()
+(defun skrf-eval-links (&optional inhibit-backlinks)
   ;; if displayed node name and saved node name are different
   (if (not (string=
 	    (skrf-node-name)
@@ -881,7 +903,8 @@ accessed to get current node name at other times.")
   ;; add link properties to any link that doesn't already have them
   (skrf-give-links-properties)
   ;; add a backlink to any link that doesn't have one
-  (skrf-give-links-backlinks))
+  (if (not inhibit-backlinks)
+      (skrf-give-links-backlinks)))
 
 (define-derived-mode skrode-mode text-mode "Skrode"
   "a programmable personal knowledge base system" :interactive nil
