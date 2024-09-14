@@ -221,6 +221,7 @@ the current node."
       ;; finally, delete the dumped node's file
       (delete-file target-filename)
       ;; and if a buffer is visiting the node-to-be-dumped, kill the buffer
+      (evict-from-skrode-names-cache target-node-name)
       (if (get-file-buffer target-filename)
 	  (with-current-buffer (get-file-buffer target-filename)
 	    ;; so that kill-buffer will not ask user for confirmation
