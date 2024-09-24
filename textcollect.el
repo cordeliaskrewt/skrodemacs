@@ -1,4 +1,4 @@
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; to use, make sure your .emacs file includes
 ;; (transient-mark-mode 1)
@@ -34,11 +34,10 @@
 ;; textcollect-clear-collection - called by user (cmd-f1)
 ;; textcollect-delete-collection - called by user (f2)
 ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defvar textcollect-map nil)
 (progn (setq textcollect-map (make-sparse-keymap))
-       (set-keymap-parent textcollect-map text-mode-map)
        ;; turn collection mode on or off with f1
        (define-key textcollect-map (kbd "<f1>")
 	 'textcollect-toggle-collecting)
