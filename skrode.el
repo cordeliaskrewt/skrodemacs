@@ -66,6 +66,11 @@
 ;; Node names cache for autocomplete
 (defvar skrode-node-names-cache nil)
 
+
+(defmacro with-inhibit-modification-hooks (&rest body)
+  `(let ((inhibit-modification-hooks t))
+     ,@body))
+
 (defun skrf-open-history () (interactive)
   (skrf-open-node-in-new-window (skrf-filename skrode-history-node)))
 
@@ -90,10 +95,6 @@
 
 (defun skrf-is-special-node (node-name)
   (string= node-name skrode-history-node))
-
-(defmacro with-inhibit-modification-hooks (&rest body)
-  `(let ((inhibit-modification-hooks t))
-     ,@body))
 
 ;; creating a function to shadow forward-button
 ;; so display-message (default t) will not show help-echo in minibuffer
@@ -909,6 +910,7 @@ accessed to get current node name at other times.")
   ;; add a backlink to any link that doesn't have one
   (if (not (skrf-is-special-node skrode-node-name))
       (skrf-give-links-backlinks)))
+
 
 (define-derived-mode skrode-mode text-mode "Skrode"
   "a programmable personal knowledge base system" :interactive nil
