@@ -1,10 +1,10 @@
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; to use, add these lines to .emacs file:
 ;; (require 'autowin)
 ;; (add-hook 'window-setup-hook 'autowin-mode)
 ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; so that C-w can be used as a prefix key by this minor mode
 (global-unset-key (kbd "C-w"))
@@ -16,7 +16,7 @@
 ;; occupies the physical space where point had been located
 (setq delete-window-choose-selected 'pos)
 
-;; max characters allowed per line - for a skrode/text file
+;; min characters allowed per line - for a skrode/text file
 (defvar autowin-default-width 45)
 
 ;; a set of four helper functions to make me less confused
